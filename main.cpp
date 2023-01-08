@@ -116,6 +116,10 @@ static void Callback(void* ptr)
         fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_PATH_DISCOVERED\n");
     } else if(msg->event_code == ZTS_EVENT_STORE_PLANET) {
         fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_PLANET\n");
+    } else if(msg->event_code == ZTS_EVENT_STORE_IDENTITY_SECRET) {
+        fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_IDENTITY_SECRET\n");
+    } else if(msg->event_code == ZTS_EVENT_STORE_IDENTITY_PUBLIC) {
+        fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_IDENTITY_PUBLIC\n");
     } else {
         fprintf(stderr, "callback %i\n", msg->event_code);
     }
