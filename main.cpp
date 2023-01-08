@@ -1,4 +1,3 @@
-#include <ZeroTierSockets.h>
 #include <array>
 #include <cstdio>
 #include <ctime>
@@ -8,6 +7,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <ZeroTierSockets.h>
 
 typedef std::vector<uint8_t> buffer_t;
 typedef std::array<uint8_t, 16> address_t;
