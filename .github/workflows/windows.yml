@@ -23,5 +23,5 @@ jobs:
       if: ${{ !env.ACT }}
       uses: actions/upload-artifact@v2
       with:
-        name: devilutionx-gamelist-x64
+        name: devilutionx-gamelist-Windows-x64
         path: build\Debug\devilutionx-gamelist.exe
