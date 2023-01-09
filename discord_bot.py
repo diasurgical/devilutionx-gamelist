@@ -10,77 +10,125 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 backgroundRunning = 0
+currentOnline = 0
 globalOnlineListMessage = -1
+globalChannel = -1
 
-def generateGameList(games):
-    text = 'There are currently **' + str(len(games)) + '** public games.'
+def formatGame(game):
+    ended = time.time() - game['last_seen'] < aliveTime
+    if ended:
+        text = '~~' + game['id'].upper() + '~~';
+    else:
+        text = '**' + game['id'].upper() + '**';
+    if game['type'] == 'DRTL':
+        text += ' <:diabloico:760201452957335552>'
+    elif game['type'] == 'DSHR':
+        text += ' <:diabloico:760201452957335552> (spawn)'
+    elif game['type'] == 'HRTL':
+        text += ' <:hellfire:766901810580815932>'
+    elif game['type'] == 'HSHR':
+        text += ' <:hellfire:766901810580815932> (spawn)'
+    elif game['type'] == 'IRON':
+        text += ' Ironman'
+    else:
+        text += ' ' + game['type']
 
-    if len(games) != 0:
-        text += '\n\n';
+    text += ' ' + game['version']
 
-    # Print each name in the list
-    for ID in games:
-        game = games[ID]
-        text += '**' + game['id'].upper() + '**';
-        if game['type'] == 'DRTL':
-            text += ' <:diabloico:760201452957335552>'
-        elif game['type'] == 'HRTL':
-            text += ' <:hellfire:766901810580815932>'
-        else:
-            text += ' ' + game['type']
+    if game['tick_rate'] == 20:
+        text += ''
+    elif game['tick_rate'] == 30:
+        text += ' Fast'
+    elif game['tick_rate'] == 40:
+        text += ' Faster'
+    elif game['tick_rate'] == 50:
+        text += ' Fastest'
+    else:
+        text += ' speed: ' + str(game['tick_rate'])
 
-        text += ' ' + game['version']
+    if game['difficulty'] == 0:
+        text += ' Normal'
+    elif game['difficulty'] == 1:
+        text += ' Nightmare'
+    elif game['difficulty'] == 2:
+        text += ' Hell'
 
-        if game['tick_rate'] == 20:
-            text += ''
-        elif game['tick_rate'] == 30:
-            text += ' Fast'
-        elif game['tick_rate'] == 40:
-            text += ' Faster'
-        elif game['tick_rate'] == 50:
-            text += ' Fastest'
-        else:
-            text += ' speed: ' + str(game['tick_rate'])
+    attributes = []
+    if game['run_in_town']:
+        attributes.append('Run in Town')
+    if game['theo_quest'] and game['type'] != 'DRTL':
+        attributes.append('Theo Quest')
+    if game['cow_quest'] and game['type'] != 'DRTL':
+        attributes.append('Cow Quest')
+    if game['friendly_fire']:
+        attributes.append('Friendly Fire')
 
-        if game['difficulty'] == 0:
-            text += ' Normal'
-        elif game['difficulty'] == 1:
-            text += ' Nightmare'
-        elif game['difficulty'] == 2:
-            text += ' Hell'
+    if len(attributes) != 0:
+        text += ' ('
+        text += ', '.join(attributes)
+        text += ')'
 
-        attributes = []
-        if game['run_in_town']:
-            attributes.append('Run in Town')
-        if game['theo_quest'] and game['type'] != 'DRTL':
-            attributes.append('Theo Quest')
-        if game['cow_quest'] and game['type'] != 'DRTL':
-            attributes.append('Cow Quest')
-        if game['friendly_fire']:
-            attributes.append('Friendly Fire')
+    text += '\nPlayers: **' + '**, **'.join(game['players']) + '**'
+    text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
+    if ended:
+        text = '\nEnded after: `' + formatTimeDelta(round((time.time() - gameList[gameId]['first_seen']) / 60)) + '`'
 
-        if len(attributes) != 0:
-            text += ' ('
-            text += ", ".join(attributes)
-            text += ')'
-
-        text += '\nPlayers: **' + "**, **".join(game['players']) + '**\n\n'
     return text
 
-async def listMessages():
-	try:
-		global globalOnlineListMessage
-		async for m in client.get_channel(1061483226767556719).history(limit=5):
-			globalOnlineListMessage = m
-	except Exception as err:
-		print("Got some exception in listMessages()")
-		print(str(err))
-	pass
+async def updateStatusMessage():
+    global currentOnline
+    global globalChannel
+    global globalOnlineListMessage
+    if (globalOnlineListMessage != -1):
+        await globalOnlineListMessage.delete()
+        globalOnlineListMessage = -1
+    text = 'There are currently **' + str(currentOnline) + '** public games.'
+    if currentOnline == 1:
+        text = 'There is currently **' + str(currentOnline) + '** public game.'
+    globalOnlineListMessage = await globalChannel.send(text)
+
+async def updateGameMessage(gameId):
+    global globalChannel
+    text = formatGame(gameList[gameId])
+    if 'message' in gameList[gameId].keys():
+        if (gameList[gameId]['message'].content != text):
+            await gameList[gameId]['message'].edit(content=text)
+        return
+    gameList[gameId]['message'] = await globalChannel.send(text)
+
+def formatTimeDelta(minutes):
+    if minutes < 2:
+        return '1 minute'
+    elif minutes < 60:
+        return str(minutes) + ' minutes'
+
+    text = '';
+    if minutes < 120:
+        text += '1 hour'
+        minutes -= 60
+    else:
+        text += str(round(seconds / 60)) + ' hours'
+        minutes -= round(seconds / 60);
+
+    if (minutes > 0):
+        text += ' and ' + formatTimeDelta(minutes)
+
+    return text;
+
+async def endGameMessage(gameId):
+    if 'message' in gameList[gameId].keys():
+        await gameList[gameId]['message'].edit(formatGame(gameList[gameId]))
+
+async def removeGameMessages(gameIds):
+    for gameId in gameIds:
+        if 'message' in gameList[gameId].keys():
+            await gameList[gameId]['message'].delete()
+            del gameList[gameId]['message']
 
 gameList = {}
 backgroundTaskRunning = 0
 async def backgroundTask():
-    await listMessages()
+    global currentOnline
     lastRefresh = 0
     refreshSeconds = 60 #refresh gamelist every x seconds
     aliveTime = 120 #games are marked as active for x seconds every time they show up
@@ -89,44 +137,60 @@ async def backgroundTask():
         if time.time() - lastRefresh >= refreshSeconds:
             lastRefresh = time.time()
             # Call the external program and get the output
-            output = subprocess.run(["./devilutionx-gamelist"], capture_output=True).stdout
+            output = subprocess.run(['./devilutionx-gamelist'], capture_output=True).stdout
             # Load the output as a JSON list
             games = json.loads(output)
-            tmpGameList = {}
             for game in games:
                 key = game['id'].upper()
-                gameList[key] = game
-                gameList[key]["lastOnline"] = time.time()
+                if key in gameList.keys():
+                    del gameList[key]['players']
+                    gameList[key]['players'] = game['players']
+                    gameList[key]['last_seen'] = time.time()
+                    continue
 
+                gameList[key] = game
+                gameList[key]['first_seen'] = time.time()
+                gameList[key]['last_seen'] = time.time()
+
+            endedGames = [];
             for key in gameList:
                 game = gameList[key]
-                if time.time() - game["lastOnline"] <= aliveTime:
-                    tmpGameList[key] = game
+                if time.time() - game['last_seen'] < aliveTime:
+                    continue
+                endedGames.append(key);
+                await endGameMessage(key)
 
-            await globalOnlineListMessage.edit(content=generateGameList(tmpGameList))
-            activity = discord.Activity(name='Games online: '+str(len(tmpGameList)), type=discord.ActivityType.watching)
+            for key in endedGames:
+                del gameList[key]
+
+            if len(endedGames) != 0:
+                await removeGameMessages(gameList.keys())
+
+            for gameId in gameList.keys():
+                await updateGameMessage(gameId)
+
+            if (currentOnline == len(gameList)) or len(endedGames) != 0:
+                continue
+
+            currentOnline = len(gameList)
+            await updateStatusMessage()
+            activity = discord.Activity(name='Games online: '+str(currentOnline), type=discord.ActivityType.watching)
             await client.change_presence(activity=activity)
             ct = datetime.datetime.now()
-            print("[" + str(ct) + "] Refreshing game list - " + str(len(tmpGameList)) + " games")
-
+            print('[' + str(ct) + '] Refreshing game list - ' + str(currentOnline) + ' games')
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
+    global globalChannel
+    globalChannel = client.get_channel(1061483226767556719)
     global backgroundTaskRunning
     if backgroundTaskRunning == 0:
         backgroundTaskRunning = 1
         await backgroundTask()
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-
-    #if message.content.startswith('!games'):
-
-token = ""
-with open("./discord_bot_token", 'r') as file:
+token = ''
+with open('./discord_bot_token', 'r') as file:
     token = file.readline()
 
 client.run(token)
