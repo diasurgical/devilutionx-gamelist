@@ -13,9 +13,11 @@ backgroundRunning = 0
 currentOnline = 0
 globalOnlineListMessage = -1
 globalChannel = -1
+gameTTL = 120 # games are marked as active for x seconds every time they show up
 
 def formatGame(game):
-    ended = time.time() - game['last_seen'] < aliveTime
+    global gameTTL
+    ended = time.time() - game['last_seen'] < gameTTL
     if ended:
         text = '~~' + game['id'].upper() + '~~';
     else:
@@ -71,7 +73,7 @@ def formatGame(game):
     text += '\nPlayers: **' + '**, **'.join(game['players']) + '**'
     text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
     if ended:
-        text = '\nEnded after: `' + formatTimeDelta(round((time.time() - gameList[gameId]['first_seen']) / 60)) + '`'
+        text = '\nEnded after: `' + formatTimeDelta(round((time.time() - game['first_seen']) / 60)) + '`'
 
     return text
 
@@ -128,10 +130,10 @@ async def removeGameMessages(gameIds):
 gameList = {}
 backgroundTaskRunning = 0
 async def backgroundTask():
+    global gameTTL
     global currentOnline
     lastRefresh = 0
     refreshSeconds = 60 #refresh gamelist every x seconds
-    aliveTime = 120 #games are marked as active for x seconds every time they show up
     while True:
         await asyncio.sleep(1)
         if time.time() - lastRefresh >= refreshSeconds:
@@ -155,7 +157,7 @@ async def backgroundTask():
             endedGames = [];
             for key in gameList:
                 game = gameList[key]
-                if time.time() - game['last_seen'] < aliveTime:
+                if time.time() - game['last_seen'] < gameTTL:
                     continue
                 endedGames.append(key);
                 await endGameMessage(key)
