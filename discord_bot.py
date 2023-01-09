@@ -9,7 +9,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
-backgroundRunning = 0
 currentOnline = 0
 globalOnlineListMessage = -1
 globalChannel = -1
@@ -142,6 +141,10 @@ async def backgroundTask():
             output = subprocess.run(['./devilutionx-gamelist'], capture_output=True).stdout
             # Load the output as a JSON list
             games = json.loads(output)
+
+            ct = datetime.datetime.now()
+            print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
+
             for game in games:
                 key = game['id'].upper()
                 if key in gameList.keys():
@@ -171,27 +174,21 @@ async def backgroundTask():
             for gameId in gameList.keys():
                 await updateGameMessage(gameId)
 
-            activity = discord.Activity(name='Games online: '+str(len(gameList)), type=discord.ActivityType.watching)
-            await client.change_presence(activity=activity)
-
             if (currentOnline == len(gameList)) or len(endedGames) != 0:
                 continue
 
             currentOnline = len(gameList)
             await updateStatusMessage()
 
-            ct = datetime.datetime.now()
-            print('[' + str(ct) + '] Refreshing game list - ' + str(currentOnline) + ' games')
+            activity = discord.Activity(name='Games online: '+str(currentOnline), type=discord.ActivityType.watching)
+            await client.change_presence(activity=activity)
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
     global globalChannel
     globalChannel = client.get_channel(1061483226767556719)
-    global backgroundTaskRunning
-    if backgroundTaskRunning == 0:
-        backgroundTaskRunning = 1
-        await backgroundTask()
+    await backgroundTask()
 
 token = ''
 with open('./discord_bot_token', 'r') as file:
