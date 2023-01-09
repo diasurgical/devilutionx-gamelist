@@ -26,6 +26,8 @@ def generateGameList(games):
             text += ' <:diabloico:760201452957335552>'
         elif game['type'] == 'HRTL':
             text += ' <:hellfire:766901810580815932>'
+        elif game['type'] == 'MEMD':
+            text += ' <:one_ring:1061898681504251954>'
         else:
             text += ' ' + game['type']
 
