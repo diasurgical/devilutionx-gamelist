@@ -17,7 +17,7 @@ gameTTL = 120 # games are marked as active for x seconds every time they show up
 
 def formatGame(game):
     global gameTTL
-    ended = time.time() - game['last_seen'] < gameTTL
+    ended = time.time() - game['last_seen'] >= gameTTL
     if ended:
         text = '~~' + game['id'].upper() + '~~';
     else:
@@ -73,7 +73,7 @@ def formatGame(game):
     text += '\nPlayers: **' + '**, **'.join(game['players']) + '**'
     text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
     if ended:
-        text = '\nEnded after: `' + formatTimeDelta(round((time.time() - game['first_seen']) / 60)) + '`'
+        text += '\nEnded after: `' + formatTimeDelta(round((time.time() - game['first_seen']) / 60)) + '`'
 
     return text
 
@@ -119,7 +119,7 @@ def formatTimeDelta(minutes):
 
 async def endGameMessage(gameId):
     if 'message' in gameList[gameId].keys():
-        await gameList[gameId]['message'].edit(formatGame(gameList[gameId]))
+        await gameList[gameId]['message'].edit(content=formatGame(gameList[gameId]))
 
 async def removeGameMessages(gameIds):
     for gameId in gameIds:
@@ -171,13 +171,15 @@ async def backgroundTask():
             for gameId in gameList.keys():
                 await updateGameMessage(gameId)
 
+            activity = discord.Activity(name='Games online: '+str(len(gameList)), type=discord.ActivityType.watching)
+            await client.change_presence(activity=activity)
+
             if (currentOnline == len(gameList)) or len(endedGames) != 0:
                 continue
 
             currentOnline = len(gameList)
             await updateStatusMessage()
-            activity = discord.Activity(name='Games online: '+str(currentOnline), type=discord.ActivityType.watching)
-            await client.change_presence(activity=activity)
+
             ct = datetime.datetime.now()
             print('[' + str(ct) + '] Refreshing game list - ' + str(currentOnline) + ' games')
 
