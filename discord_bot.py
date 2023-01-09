@@ -31,6 +31,8 @@ def formatGame(game):
         text += ' <:hellfire:766901810580815932> (spawn)'
     elif game['type'] == 'IRON':
         text += ' Ironman'
+    elif game['type'] == 'MEMD':
+        text += ' <:one_ring:1061898681504251954>'
     else:
         text += ' ' + game['type']
 
