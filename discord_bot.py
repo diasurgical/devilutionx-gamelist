@@ -110,8 +110,9 @@ def formatTimeDelta(minutes):
         text += '1 hour'
         minutes -= 60
     else:
-        text += str(round(minutes / 60)) + ' hours'
-        minutes -= round(minutes / 60);
+        hours = round(minutes / 60)
+        text += str(hours) + ' hours'
+        minutes -= hours * 60
 
     if (minutes > 0):
         text += ' and ' + formatTimeDelta(minutes)
