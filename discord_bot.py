@@ -140,9 +140,15 @@ async def backgroundTask():
         if time.time() - lastRefresh >= refreshSeconds:
             lastRefresh = time.time()
             # Call the external program and get the output
-            output = subprocess.run(['./devilutionx-gamelist'], capture_output=True).stdout
+            proc = await asyncio.create_subprocess_shell(
+                './devilutionx-gamelist',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE)
+
+            stdout, stderr = await proc.communicate()
+
             # Load the output as a JSON list
-            games = json.loads(output)
+            games = json.loads(stdout.decode())
 
             ct = datetime.datetime.now()
             print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
