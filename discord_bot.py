@@ -103,7 +103,10 @@ async def updateGameMessage(gameId):
     text = formatGame(gameList[gameId])
     if 'message' in gameList[gameId].keys():
         if (gameList[gameId]['message'].content != text):
-            await gameList[gameId]['message'].edit(content=text)
+            try:
+                await gameList[gameId]['message'].edit(content=text)
+            except discord.errors.NotFound:
+                pass
         return
     gameList[gameId]['message'] = await globalChannel.send(text)
 
@@ -129,12 +132,18 @@ def formatTimeDelta(minutes):
 
 async def endGameMessage(gameId):
     if 'message' in gameList[gameId].keys():
-        await gameList[gameId]['message'].edit(content=formatGame(gameList[gameId]))
+        try:
+            await gameList[gameId]['message'].edit(content=formatGame(gameList[gameId]))
+        except discord.errors.NotFound:
+            pass
 
 async def removeGameMessages(gameIds):
     for gameId in gameIds:
         if 'message' in gameList[gameId].keys():
-            await gameList[gameId]['message'].delete()
+            try:
+                await gameList[gameId]['message'].delete()
+            except discord.errors.NotFound:
+                pass
             del gameList[gameId]['message']
 
 gameList = {}
