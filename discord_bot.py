@@ -4,6 +4,7 @@ import json
 import time
 import asyncio
 import datetime
+import math
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -121,7 +122,7 @@ def formatTimeDelta(minutes):
         text += '1 hour'
         minutes -= 60
     else:
-        hours = floor(minutes / 60)
+        hours = math.floor(minutes / 60)
         text += str(hours) + ' hours'
         minutes -= hours * 60
 
@@ -172,6 +173,17 @@ async def backgroundTask():
             print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
 
             for game in games:
+                banned = False
+                with open('./banlist', 'r') as file:
+                    words = file.read().split('\n')
+                    for word in words:
+                        for name in game['players']:
+                            if word.strip() and word.strip().upper() in name.upper():
+                                banned = True
+                                break
+                if banned:
+                    continue
+
                 key = game['id'].upper()
                 if key in gameList.keys():
                     del gameList[key]['players']
