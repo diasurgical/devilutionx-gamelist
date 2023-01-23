@@ -92,7 +92,10 @@ async def updateStatusMessage():
     global globalChannel
     global globalOnlineListMessage
     if (globalOnlineListMessage != -1):
-        await globalOnlineListMessage.delete()
+        try:
+            await globalOnlineListMessage.delete()
+        except discord.errors.NotFound:
+            pass
         globalOnlineListMessage = -1
     text = 'There are currently **' + str(currentOnline) + '** public games.'
     if currentOnline == 1:
