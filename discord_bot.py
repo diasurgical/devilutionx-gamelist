@@ -34,14 +34,8 @@ def formatGame(game):
         text += ' Ironman'
     elif game['type'] == 'MEMD':
         text += ' <:one_ring:1061898681504251954>'
-    elif game['type'] ==  'DXTL':
+    elif game['type'] ==  'DRDX':
         text += ' <:diabloico:760201452957335552> X'
-    elif game['type'] == 'DSHX':
-        text += ' <:diabloico:760201452957335552> X (spawn)'
-    elif game['type'] == 'HXTL':
-        text += ' <:hellfire:766901810580815932> X'
-    elif game['type'] == 'HSHX':
-        text += ' <:hellfire:766901810580815932> X (spawn)'
     else:
         text += ' ' + game['type']
 
