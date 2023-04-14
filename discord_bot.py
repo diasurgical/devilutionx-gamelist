@@ -36,6 +36,10 @@ def formatGame(game):
         text += ' <:one_ring:1061898681504251954>'
     elif game['type'] ==  'DRDX':
         text += ' <:diabloico:760201452957335552> X'
+    elif game['type'] ==  'DWKD':
+        text += ' <:diabloico:760201452957335552>'
+    elif game['type'] ==  'HWKD':
+        text += ' <:hellfire:766901810580815932>'
     else:
         text += ' ' + game['type']
 
