@@ -37,9 +37,9 @@ def formatGame(game):
     elif game['type'] ==  'DRDX':
         text += ' <:diabloico:760201452957335552> X'
     elif game['type'] ==  'DWKD':
-        text += ' <:diabloico:760201452957335552> wkdmod'
+        text += ' <:diabloico:760201452957335552> wkdmod Diablo'
     elif game['type'] ==  'HWKD':
-        text += ' <:hellfire:766901810580815932> wkdmod'
+        text += ' <:hellfire:766901810580815932> wkdmod Hellfire'
     else:
         text += ' ' + game['type']
 
