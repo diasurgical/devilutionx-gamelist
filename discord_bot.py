@@ -166,9 +166,12 @@ async def backgroundTask():
                 stderr=asyncio.subprocess.PIPE)
 
             stdout, stderr = await proc.communicate()
+            output = stdout.decode()
+            if not output:
+                continue
 
             # Load the output as a JSON list
-            games = json.loads(stdout.decode())
+            games = json.loads(output)
 
             ct = datetime.datetime.now()
             print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
