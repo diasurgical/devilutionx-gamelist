@@ -148,6 +148,7 @@ struct GameData {
     uint8_t theoQuest;
     uint8_t cowQuest;
     uint8_t friendlyFire;
+    uint8_t fullQuests;
 };
 
 bool recv(address_t& addr, buffer_t& data)
@@ -220,7 +221,7 @@ void decode(const buffer_t& data, address_t sender)
 
     char buffer[512] = {};
 
-    sprintf(buffer, "{\"id\":\"%s\",\"address\":\"%s\",\"seed\":%d,\"type\":\"%c%c%c%c\",\"version\":\"%d.%d.%d\",\"difficulty\":%d,\"tick_rate\":%d,\"run_in_town\":%s,\"theo_quest\":%s,\"cow_quest\":%s,\"friendly_fire\":%s,\"players\":[",
+    sprintf(buffer, "{\"id\":\"%s\",\"address\":\"%s\",\"seed\":%d,\"type\":\"%c%c%c%c\",\"version\":\"%d.%d.%d\",\"difficulty\":%d,\"tick_rate\":%d,\"run_in_town\":%s,\"full_quests\":%s,\"theo_quest\":%s,\"cow_quest\":%s,\"friendly_fire\":%s,\"players\":[",
         gameName.c_str(),
         ipstr,
         gameData->seed,
@@ -231,7 +232,8 @@ void decode(const buffer_t& data, address_t sender)
         boolValues[gameData->runInTown],
         boolValues[gameData->theoQuest],
         boolValues[gameData->cowQuest],
-        boolValues[gameData->friendlyFire]);
+        boolValues[gameData->friendlyFire],
+        boolValues[gameData->fullQuests]);
 
     bool first = true;
     for (std::string name : playerNames) {

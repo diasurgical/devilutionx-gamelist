@@ -66,6 +66,8 @@ def formatGame(game):
     attributes = []
     if game['run_in_town']:
         attributes.append('Run in Town')
+    if game['full_quests']:
+        attributes.append('Quests')
     if game['theo_quest'] and game['type'] != 'DRTL':
         attributes.append('Theo Quest')
     if game['cow_quest'] and game['type'] != 'DRTL':
