@@ -221,7 +221,7 @@ void decode(const buffer_t& data, address_t sender)
 
     char buffer[512] = {};
 
-    sprintf(buffer, "{\"id\":\"%s\",\"address\":\"%s\",\"seed\":%d,\"type\":\"%c%c%c%c\",\"version\":\"%d.%d.%d\",\"difficulty\":%d,\"tick_rate\":%d,\"run_in_town\":%s,\"full_quests\":%s,\"theo_quest\":%s,\"cow_quest\":%s,\"friendly_fire\":%s,\"players\":[",
+    sprintf(buffer, "{\"id\":\"%s\",\"address\":\"%s\",\"seed\":%d,\"type\":\"%c%c%c%c\",\"version\":\"%d.%d.%d\",\"difficulty\":%d,\"tick_rate\":%d,\"run_in_town\":%s,\"theo_quest\":%s,\"cow_quest\":%s,\"friendly_fire\":%s,\"full_quests\":%s,\"players\":[",
         gameName.c_str(),
         ipstr,
         gameData->seed,
