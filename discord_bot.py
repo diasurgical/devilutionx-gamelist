@@ -5,6 +5,7 @@ import time
 import asyncio
 import datetime
 import math
+import re
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -14,6 +15,9 @@ currentOnline = 0
 globalOnlineListMessage = -1
 globalChannel = -1
 gameTTL = 120 # games are marked as active for x seconds every time they show up
+
+def escapeDiscordFormattingCharacters(text: str):
+    return re.sub(r'([-\\*_#[\]()<>`])', r'\\\1', text)
 
 def formatGame(game):
     global gameTTL
@@ -80,7 +84,7 @@ def formatGame(game):
         text += ', '.join(attributes)
         text += ')'
 
-    text += '\nPlayers: **' + '**, **'.join(game['players']) + '**'
+    text += '\nPlayers: **' + '**, **'.join([escapeDiscordFormattingCharacters(name) for name in game['players']]) + '**'
     text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
     if ended:
         text += '\nEnded after: `' + formatTimeDelta(round((time.time() - game['first_seen']) / 60)) + '`'
