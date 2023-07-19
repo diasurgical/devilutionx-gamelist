@@ -154,6 +154,33 @@ async def removeGameMessages(gameIds):
                 pass
             del gameList[gameId]['message']
 
+def anyPlayerNameIsInvalid(players):
+    for name in players:
+        # using the same restricted character list as DevilutionX, see
+        #  https://github.com/diasurgical/devilutionX/blob/0eda8d9367e08cea08b2ad81e1ce534e927646d6/Source/DiabloUI/diabloui.cpp#L649
+        if re.search(r'[,<>%&\\"?*#/: ]', name):
+            return True
+
+        for char in name:
+            if ord(char) < 32 or ord(char) > 126:
+                # ASCII control characters or anything outside the basic latin set aren't allowed
+                #  in the current DevilutionX codebase, see
+                #  https://github.com/diasurgical/devilutionX/blob/0eda8d9367e08cea08b2ad81e1ce534e927646d6/Source/DiabloUI/diabloui.cpp#L654
+                return True
+
+    return False
+
+def anyPlayerNameContainsABannedWord(players):
+    with open('./banlist', 'r') as file:
+        words = set([line.strip().upper() for line in file.read().split('\n') if line.strip()])
+
+        for name in players:
+            for word in words:
+                if word in name.upper():
+                    return True
+
+    return False
+
 gameList = {}
 backgroundTaskRunning = 0
 async def backgroundTask():
@@ -183,15 +210,7 @@ async def backgroundTask():
             print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
 
             for game in games:
-                banned = False
-                with open('./banlist', 'r') as file:
-                    words = file.read().split('\n')
-                    for word in words:
-                        for name in game['players']:
-                            if word.strip() and word.strip().upper() in name.upper():
-                                banned = True
-                                break
-                if banned:
+                if anyPlayerNameIsInvalid(game['players']) or anyPlayerNameContainsABannedWord(game['players']):
                     continue
 
                 key = game['id'].upper()
