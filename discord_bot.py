@@ -19,9 +19,9 @@ def formatGame(game):
     global gameTTL
     ended = time.time() - game['last_seen'] >= gameTTL
     if ended:
-        text = '~~' + game['id'].upper() + '~~';
+        text = '~~' + game['id'].upper() + '~~'
     else:
-        text = '**' + game['id'].upper() + '**';
+        text = '**' + game['id'].upper() + '**'
     if game['type'] == 'DRTL':
         text += ' <:diabloico:760201452957335552>'
     elif game['type'] == 'DSHR':
@@ -120,7 +120,7 @@ def formatTimeDelta(minutes):
     elif minutes < 60:
         return str(minutes) + ' minutes'
 
-    text = '';
+    text = ''
     if minutes < 120:
         text += '1 hour'
         minutes -= 60
@@ -132,7 +132,7 @@ def formatTimeDelta(minutes):
     if (minutes > 0):
         text += ' and ' + formatTimeDelta(minutes)
 
-    return text;
+    return text
 
 async def endGameMessage(gameId):
     if 'message' in gameList[gameId].keys():
@@ -201,12 +201,12 @@ async def backgroundTask():
                 gameList[key]['first_seen'] = time.time()
                 gameList[key]['last_seen'] = time.time()
 
-            endedGames = [];
+            endedGames = []
             for key in gameList:
                 game = gameList[key]
                 if time.time() - game['last_seen'] < gameTTL:
                     continue
-                endedGames.append(key);
+                endedGames.append(key)
                 await endGameMessage(key)
 
             for key in endedGames:
