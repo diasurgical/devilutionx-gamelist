@@ -248,16 +248,10 @@ void decode(const buffer_t& data, address_t sender)
     gameList[gameName] = buffer;
 }
 
-void ztsNodeStop()
-{
-    zts_node_stop();
-}
-
 int main(int argc, char* argv[])
 {
     zts_init_from_storage("./zerotier");
     zts_init_set_event_handler(&Callback);
-    std::atexit(ztsNodeStop);
     zts_node_start();
 
     while(!zt_network_ready || !zt_node_online) {
@@ -280,6 +274,8 @@ int main(int argc, char* argv[])
         }
         zts_util_delay(1000);
     }
+
+    zts_node_stop();
 
     printf("[");
     bool first = true;
