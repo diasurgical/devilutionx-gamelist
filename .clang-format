@@ -1,0 +1,11 @@
+BasedOnStyle: webkit
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: None
+PointerAlignment: Left
+TabWidth: 4
+UseTab: Never
+SortIncludes: CaseInsensitive
+NamespaceIndentation: None
+FixNamespaceComments: true
+SpaceBeforeParens: Never

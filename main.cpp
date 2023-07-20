@@ -211,7 +211,7 @@ void decode(const buffer_t& data, address_t sender)
 
     char* type = (char*)&gameData->type;
 
-    const char *boolValues[] {
+    const char* boolValues[] {
         "false",
         "true",
     };
@@ -236,8 +236,8 @@ void decode(const buffer_t& data, address_t sender)
         boolValues[gameData->fullQuests]);
 
     bool first = true;
-    for (std::string name : playerNames) {
-        if (!first)
+    for(std::string name : playerNames) {
+        if(!first)
             sprintf(buffer + strlen(buffer), ",");
         sprintf(buffer + strlen(buffer), "\"%s\"", name.c_str());
         first = false;
@@ -275,7 +275,7 @@ int main(int argc, char* argv[])
     std::time_t result = std::time(nullptr);
     while(dataRecived || std::time(nullptr) - result < 5) {
         dataRecived = recv(peer, data);
-        if(dataRecived ) {
+        if(dataRecived) {
             decode(data, peer);
         }
         zts_util_delay(1000);
@@ -283,8 +283,8 @@ int main(int argc, char* argv[])
 
     printf("[");
     bool first = true;
-    for (const auto game : gameList) {
-        if (!first)
+    for(const auto game : gameList) {
+        if(!first)
             printf(",");
         printf("%s", game.second.c_str());
         first = false;
