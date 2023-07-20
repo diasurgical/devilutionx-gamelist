@@ -1,10 +1,12 @@
 #include <array>
+#include <charconv>
 #include <cstdio>
 #include <ctime>
 #include <lwip/mld6.h>
 #include <lwip/sockets.h>
 #include <lwip/tcpip.h>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 #include <ZeroTierSockets.h>
@@ -151,6 +153,49 @@ struct GameData {
     uint8_t fullQuests;
 };
 
+// GameInfo represents a value for json serialisation, the types chosen represent constraints of that
+//  format and not expected values from DevilutionX
+struct GameInfo {
+    using json_string = std::string;
+    using json_number = uint64_t;
+    using json_boolean = bool;
+    template <class T>
+    using json_array = std::vector<T>;
+
+    json_string id;
+    json_string address;
+    json_number seed;
+    json_string type;
+    json_string version;
+    json_number difficulty;
+    json_number tickRate;
+    json_boolean runInTown;
+    json_boolean theoQuest;
+    json_boolean cowQuest;
+    json_boolean friendlyFire;
+    json_boolean fullQuests;
+    json_array<json_string> players;
+};
+
+void to_json(nlohmann::json& j, const GameInfo& game)
+{
+    j = nlohmann::json {
+        { "id", game.id },
+        { "address", game.address },
+        { "seed", game.seed },
+        { "type", game.type },
+        { "version", game.version },
+        { "difficulty", game.difficulty },
+        { "tick_rate", game.tickRate },
+        { "run_in_town", game.runInTown },
+        { "theo_quest", game.theoQuest },
+        { "cow_quest", game.cowQuest },
+        { "friendly_fire", game.friendlyFire },
+        { "full_quests", game.fullQuests },
+        { "players", game.players },
+    };
+}
+
 bool recv(address_t& addr, buffer_t& data)
 {
     unsigned char buf[65536];
@@ -172,8 +217,38 @@ static constexpr uint8_t Broadcast = 0xFF;
 static constexpr uint8_t InfoRequest = 0x21;
 static constexpr uint8_t InfoReply = 0x22;
 
-std::map<std::string, std::string> gameList;
+std::map<std::string, GameInfo> gameList;
 constexpr int PlayerNameLength = 32;
+
+std::string makeVersionString(const GameData& gameData)
+{
+    // each part can be at most 3 digits ("255"), plus the two separators, plus one for the road
+    constexpr size_t MAX_VERSION_STR_LENGTH = 12;
+    std::array<char, MAX_VERSION_STR_LENGTH> buffer {};
+    auto end = buffer.data() + buffer.size();
+
+    std::to_chars_result result = std::to_chars(buffer.data(), end, gameData.versionMajor);
+    if(result.ec != std::errc()) {
+        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        return {};
+    }
+    *result.ptr = '.';
+    ++result.ptr;
+    result = std::to_chars(result.ptr, end, gameData.versionMinor);
+    if(result.ec != std::errc()) {
+        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        return {};
+    }
+    *result.ptr = '.';
+    ++result.ptr;
+    result = std::to_chars(result.ptr, end, gameData.versionPatch);
+    if(result.ec != std::errc()) {
+        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        return {};
+    }
+
+    return std::string(buffer.data(), result.ptr);
+}
 
 void decode(const buffer_t& data, address_t sender)
 {
@@ -195,57 +270,39 @@ void decode(const buffer_t& data, address_t sender)
     if(data.data()[3] != sizeof(GameData))
         return;
     const GameData* gameData = (const GameData*)(data.data() + 3);
-    std::vector<std::string> playerNames;
+    GameInfo game;
+
+    size_t gameNameSize = data.size() - neededSize;
+    game.id.assign(reinterpret_cast<const char*>(data.data() + neededSize), gameNameSize);
+
+    char ipstr[INET6_ADDRSTRLEN];
+    if(lwip_inet_ntop(AF_INET6, sender.data(), ipstr, INET6_ADDRSTRLEN) == NULL)
+        return;           // insufficient buffer, shouldn't be possible.
+    game.address = ipstr; // lwip_inet_ntop returns a null terminated string so we don't need to use assign
+
+    game.seed = gameData->seed;
+
+    const char* type = reinterpret_cast<const char*>(&gameData->type);
+    game.type.assign({ type[3], type[2], type[1], type[0] });
+
+    game.version = makeVersionString(*gameData);
+    game.difficulty = gameData->difficulty;
+    game.tickRate = gameData->tickRate;
+    game.runInTown = static_cast<bool>(gameData->runInTown);
+    game.theoQuest = static_cast<bool>(gameData->theoQuest);
+    game.cowQuest = static_cast<bool>(gameData->cowQuest);
+    game.friendlyFire = static_cast<bool>(gameData->friendlyFire);
+    game.fullQuests = static_cast<bool>(gameData->fullQuests);
+
     for(size_t i = 0; i < MaxPlayers; i++) {
         std::string playerName;
         const char* playerNamePointer = (const char*)(data.data() + 3 + sizeof(GameData) + (i * PlayerNameLength));
         playerName.append(playerNamePointer, strnlen(playerNamePointer, PlayerNameLength));
         if(!playerName.empty())
-            playerNames.push_back(playerName);
+            game.players.push_back(playerName);
     }
 
-    std::string gameName;
-    size_t gameNameSize = data.size() - neededSize;
-    gameName.resize(gameNameSize);
-    memcpy(&gameName[0], data.data() + neededSize, gameNameSize);
-
-    char* type = (char*)&gameData->type;
-
-    const char* boolValues[] {
-        "false",
-        "true",
-    };
-
-    char ipstr[INET6_ADDRSTRLEN];
-    lwip_inet_ntop(AF_INET6, sender.data(), ipstr, INET6_ADDRSTRLEN);
-
-    char buffer[512] = {};
-
-    sprintf(buffer, "{\"id\":\"%s\",\"address\":\"%s\",\"seed\":%d,\"type\":\"%c%c%c%c\",\"version\":\"%d.%d.%d\",\"difficulty\":%d,\"tick_rate\":%d,\"run_in_town\":%s,\"theo_quest\":%s,\"cow_quest\":%s,\"friendly_fire\":%s,\"full_quests\":%s,\"players\":[",
-        gameName.c_str(),
-        ipstr,
-        gameData->seed,
-        type[3], type[2], type[1], type[0],
-        gameData->versionMajor, gameData->versionMinor, gameData->versionPatch,
-        gameData->difficulty,
-        gameData->tickRate,
-        boolValues[gameData->runInTown],
-        boolValues[gameData->theoQuest],
-        boolValues[gameData->cowQuest],
-        boolValues[gameData->friendlyFire],
-        boolValues[gameData->fullQuests]);
-
-    bool first = true;
-    for(std::string name : playerNames) {
-        if(!first)
-            sprintf(buffer + strlen(buffer), ",");
-        sprintf(buffer + strlen(buffer), "\"%s\"", name.c_str());
-        first = false;
-    }
-
-    sprintf(buffer + strlen(buffer), "]}");
-
-    gameList[gameName] = buffer;
+    gameList[game.id] = game;
 }
 
 int main(int argc, char* argv[])
@@ -277,15 +334,11 @@ int main(int argc, char* argv[])
 
     zts_node_stop();
 
-    printf("[");
-    bool first = true;
-    for(const auto game : gameList) {
-        if(!first)
-            printf(",");
-        printf("%s", game.second.c_str());
-        first = false;
+    nlohmann::json root = nlohmann::json::array();
+    for(const auto& game : gameList) {
+        root.push_back(game.second);
     }
-    printf("]\n");
+    printf(root.dump().c_str());
 
     return 0;
 }
