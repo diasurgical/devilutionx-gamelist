@@ -17,7 +17,7 @@ globalChannel = -1
 gameTTL = 120 # games are marked as active for x seconds every time they show up
 
 def escapeDiscordFormattingCharacters(text: str):
-    return re.sub(r'([-\\*_#|~[\]()<>`])', r'\\\1', text)
+    return re.sub(r'([-\\*_#|~:@[\]()<>`])', r'\\\1', text)
 
 def formatGame(game):
     global gameTTL
