@@ -109,7 +109,7 @@ async def updateStatusMessage():
 async def updateGameMessage(gameId):
     global globalChannel
     text = formatGame(gameList[gameId])
-    if 'message' in gameList[gameId].keys():
+    if 'message' in gameList[gameId]:
         if (gameList[gameId]['message'].content != text):
             try:
                 await gameList[gameId]['message'].edit(content=text)
@@ -139,7 +139,7 @@ def formatTimeDelta(minutes):
     return text
 
 async def endGameMessage(gameId):
-    if 'message' in gameList[gameId].keys():
+    if 'message' in gameList[gameId]:
         try:
             await gameList[gameId]['message'].edit(content=formatGame(gameList[gameId]))
         except discord.errors.NotFound:
@@ -147,7 +147,7 @@ async def endGameMessage(gameId):
 
 async def removeGameMessages(gameIds):
     for gameId in gameIds:
-        if 'message' in gameList[gameId].keys():
+        if 'message' in gameList[gameId]:
             try:
                 await gameList[gameId]['message'].delete()
             except discord.errors.NotFound:
@@ -214,8 +214,7 @@ async def backgroundTask():
                     continue
 
                 key = game['id'].upper()
-                if key in gameList.keys():
-                    del gameList[key]['players']
+                if key in gameList:
                     gameList[key]['players'] = game['players']
                     gameList[key]['last_seen'] = time.time()
                     continue
@@ -225,8 +224,7 @@ async def backgroundTask():
                 gameList[key]['last_seen'] = time.time()
 
             endedGames = []
-            for key in gameList:
-                game = gameList[key]
+            for key, game in gameList.items():
                 if time.time() - game['last_seen'] < gameTTL:
                     continue
                 endedGames.append(key)
