@@ -104,7 +104,7 @@ async def update_status_message():
     global current_online
     global global_channel
     global global_online_list_message
-    if global_online_list_message != None:
+    if global_online_list_message is not None:
         try:
             await global_online_list_message.delete()
         except discord.errors.NotFound:
