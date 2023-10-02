@@ -30,27 +30,27 @@ def format_game(game):
         text = '~~' + game['id'].upper() + '~~'
     else:
         text = '**' + game['id'].upper() + '**'
-        match game['type']:
-            case 'DRTL':
-                text += ' <:diabloico:760201452957335552>'
-            case 'DSHR':
-                text += ' <:diabloico:760201452957335552> (spawn)'
-            case 'HRTL':
-                text += ' <:hellfire:766901810580815932>'
-            case 'HSHR':
-                text += ' <:hellfire:766901810580815932> (spawn)'
-            case 'IRON':
-                text += ' Ironman'
-            case 'MEMD':
-                text += ' <:one_ring:1061898681504251954>'
-            case 'DRDX':
-                text += ' <:diabloico:760201452957335552> X'
-            case 'DWKD':
-                text += ' <:mod_wkd:1097321063077122068> modDiablo'
-            case 'HWKD':
-                text += ' <:mod_wkd:1097321063077122068> modHellfire'
-            case _:
-                text += ' ' + game['type']
+    match game['type']:
+        case 'DRTL':
+            text += ' <:diabloico:760201452957335552>'
+        case 'DSHR':
+            text += ' <:diabloico:760201452957335552> (spawn)'
+        case 'HRTL':
+            text += ' <:hellfire:766901810580815932>'
+        case 'HSHR':
+            text += ' <:hellfire:766901810580815932> (spawn)'
+        case 'IRON':
+            text += ' Ironman'
+        case 'MEMD':
+            text += ' <:one_ring:1061898681504251954>'
+        case 'DRDX':
+            text += ' <:diabloico:760201452957335552> X'
+        case 'DWKD':
+            text += ' <:mod_wkd:1097321063077122068> modDiablo'
+        case 'HWKD':
+            text += ' <:mod_wkd:1097321063077122068> modHellfire'
+        case _:
+            text += ' ' + game['type']
 
     text += ' ' + game['version']
 
