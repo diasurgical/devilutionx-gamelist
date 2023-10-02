@@ -202,22 +202,16 @@ def any_player_name_contains_a_banned_word(players):
 
 
 game_list = {}
-background_task_running = 0
-
-
-async def main_task():
-    while True:
-        if client.is_ready():  # This ensures the client is ready before starting the background task.
-            await background_task()
-        else:
-            await asyncio.sleep(10)  # Wait a bit before rechecking.
+background_task_running = False
 
 
 async def background_task():
     global gameTTL
     global current_online
+    global background_task_running
     last_refresh = 0
     refresh_seconds = 60  # refresh gamelist every x seconds
+    background_task_running = True
     while True:
         # Before each loop iteration, check if the client is still connected.
         if not client.is_ready():
@@ -282,6 +276,15 @@ async def background_task():
 
             activity = discord.Activity(name='Games online: '+str(current_online), type=discord.ActivityType.watching)
             await client.change_presence(activity=activity)
+    background_task_running = False
+
+
+@client.event
+async def on_resumed():
+    print("Resumed after a reconnect!")
+    global background_task_running
+    if not background_task_running:
+        await main_task()
 
 
 @client.event
@@ -289,8 +292,18 @@ async def on_ready():
     print(f'We have logged in as {client.user}')
     global global_channel
     global_channel = client.get_channel(DISCORD_CHANNEL_ID)
+
     loop = asyncio.get_event_loop()
     loop.create_task(main_task())  # Run main_task() as a separate task when the client is ready.
+
+
+async def main_task():
+    while True:
+        if client.is_ready():  # This ensures the client is ready before starting the background task.
+            await background_task()
+        else:
+            await asyncio.sleep(10)  # Wait a bit before rechecking.
+
 
 with open('./discord_bot_token', 'r') as file:
     token = file.readline()
