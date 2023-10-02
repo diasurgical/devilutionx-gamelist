@@ -206,8 +206,11 @@ background_task_running = 0
 
 
 async def main_task():
-    await client.wait_until_ready()  # This ensures the client is ready before starting the background task.
-    await background_task()
+    while True:
+        if client.is_ready():  # This ensures the client is ready before starting the background task.
+            await background_task()
+        else:
+            await asyncio.sleep(10)  # Wait a bit before rechecking.
 
 
 async def background_task():
@@ -286,9 +289,8 @@ async def on_ready():
     print(f'We have logged in as {client.user}')
     global global_channel
     global_channel = client.get_channel(DISCORD_CHANNEL_ID)
-
-loop = asyncio.get_event_loop()
-loop.create_task(main_task())  # Run main_task() as a separate task.
+    loop = asyncio.get_event_loop()
+    loop.create_task(main_task())  # Run main_task() as a separate task when the client is ready.
 
 with open('./discord_bot_token', 'r') as file:
     token = file.readline()
