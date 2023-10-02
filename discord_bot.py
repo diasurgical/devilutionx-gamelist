@@ -289,7 +289,7 @@ async def on_resumed():
     print("Resumed after a reconnect!")
     global background_task_running
     if not background_task_running:
-        await main_task()
+        await background_task()
 
 
 @client.event
@@ -299,7 +299,7 @@ async def on_ready():
     global_channel = client.get_channel(DISCORD_CHANNEL_ID)
 
     loop = asyncio.get_event_loop()
-    loop.create_task(background_task())  # Run main_task() as a separate task when the client is ready.
+    loop.create_task(background_task())  # Run background_task() as a separate task when the client is ready.
 
 
 with open('./discord_bot_token', 'r') as file:
