@@ -268,6 +268,7 @@ async def background_task():
             activity = discord.Activity(name='Games online: '+str(current_online), type=discord.ActivityType.watching)
             await client.change_presence(activity=activity)
 
+
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
