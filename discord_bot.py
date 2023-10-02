@@ -5,6 +5,7 @@ import asyncio
 import datetime
 import math
 import re
+from typing import Optional
 
 # Constants
 DISCORD_CHANNEL_ID = 1061483226767556719
@@ -15,7 +16,7 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 current_online = 0
 global_online_list_message = None
-global_channel = -1
+global_channel: Optional[discord.TextChannel] = None
 gameTTL = 120  # games are marked as active for x seconds every time they show up
 
 
@@ -103,7 +104,7 @@ async def update_status_message():
     global current_online
     global global_channel
     global global_online_list_message
-    if global_online_list_message != -1:
+    if global_online_list_message != None:
         try:
             await global_online_list_message.delete()
         except discord.errors.NotFound:
@@ -112,6 +113,7 @@ async def update_status_message():
     text = 'There are currently **' + str(current_online) + '** public games.'
     if current_online == 1:
         text = 'There is currently **' + str(current_online) + '** public game.'
+    assert isinstance(global_channel, discord.TextChannel)
     global_online_list_message = await global_channel.send(text)
 
 
@@ -125,6 +127,7 @@ async def update_game_message(game_id):
             except discord.errors.NotFound:
                 pass
         return
+    assert isinstance(global_channel, discord.TextChannel)
     game_list[game_id]['message'] = await global_channel.send(text)
 
 
