@@ -218,7 +218,7 @@ async def background_task():
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE)
 
-            stdout, stderr = await proc.communicate()
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
             output = stdout.decode()
             if not output:
                 continue
