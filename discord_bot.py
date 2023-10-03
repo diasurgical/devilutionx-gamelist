@@ -219,7 +219,7 @@ async def background_task():
                 stderr=asyncio.subprocess.PIPE)
 
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), 2)
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
             except TimeoutError:
                 continue
             output = stdout.decode()
