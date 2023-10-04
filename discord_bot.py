@@ -209,64 +209,66 @@ async def background_task():
     last_refresh = 0
     refresh_seconds = 60  # refresh gamelist every x seconds
     while True:
-        await asyncio.sleep(1)
-        if time.time() - last_refresh >= refresh_seconds:
-            last_refresh = time.time()
-            # Call the external program and get the output
-            proc = await asyncio.create_subprocess_shell(
-                './devilutionx-gamelist',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE)
+        sleep_time = refresh_seconds - (time.time() - last_refresh)
+        if sleep_time > 0:
+            await asyncio.sleep(sleep_time)
+        last_refresh = time.time()
 
-            stdout, stderr = await proc.communicate()
-            output = stdout.decode()
-            if not output:
+        # Call the external program and get the output
+        proc = await asyncio.create_subprocess_shell(
+            './devilutionx-gamelist',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+
+        stdout, stderr = await proc.communicate()
+        output = stdout.decode()
+        if not output:
+            continue
+
+        # Load the output as a JSON list
+        games = json.loads(output)
+
+        ct = datetime.datetime.now()
+        print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
+
+        for game in games:
+            if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
                 continue
 
-            # Load the output as a JSON list
-            games = json.loads(output)
-
-            ct = datetime.datetime.now()
-            print('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
-
-            for game in games:
-                if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
-                    continue
-
-                key = game['id'].upper()
-                if key in game_list:
-                    game_list[key]['players'] = game['players']
-                    game_list[key]['last_seen'] = time.time()
-                    continue
-
-                game_list[key] = game
-                game_list[key]['first_seen'] = time.time()
+            key = game['id'].upper()
+            if key in game_list:
+                game_list[key]['players'] = game['players']
                 game_list[key]['last_seen'] = time.time()
-
-            ended_games = []
-            for key, game in game_list.items():
-                if time.time() - game['last_seen'] < gameTTL:
-                    continue
-                ended_games.append(key)
-                await end_game_message(key)
-
-            for key in ended_games:
-                del game_list[key]
-
-            if len(ended_games) != 0:
-                await remove_game_messages(game_list.keys())
-
-            for gameId in game_list.keys():
-                await update_game_message(gameId)
-
-            if (current_online == len(game_list)) or len(ended_games) != 0:
                 continue
 
-            current_online = len(game_list)
-            await update_status_message()
+            game_list[key] = game
+            game_list[key]['first_seen'] = time.time()
+            game_list[key]['last_seen'] = time.time()
 
-            activity = discord.Activity(name='Games online: '+str(current_online), type=discord.ActivityType.watching)
-            await client.change_presence(activity=activity)
+        ended_games = []
+        for key, game in game_list.items():
+            if time.time() - game['last_seen'] < gameTTL:
+                continue
+            ended_games.append(key)
+            await end_game_message(key)
+
+        for key in ended_games:
+            del game_list[key]
+
+        if len(ended_games) != 0:
+            await remove_game_messages(game_list.keys())
+
+        for gameId in game_list.keys():
+            await update_game_message(gameId)
+
+        if (current_online == len(game_list)) or len(ended_games) != 0:
+            continue
+
+        current_online = len(game_list)
+        await update_status_message()
+
+        activity = discord.Activity(name='Games online: '+str(current_online), type=discord.ActivityType.watching)
+        await client.change_presence(activity=activity)
 
 
 @client.event
