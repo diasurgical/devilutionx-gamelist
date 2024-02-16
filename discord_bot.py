@@ -26,110 +26,148 @@ def escape_discord_formatting_characters(text: str):
 
 
 def format_game(game):
-    global gameTTL
-    ended = time.time() - game['last_seen'] >= gameTTL
-    if ended:
-        text = '~~' + game['id'].upper() + '~~'
-    else:
-        text = '**' + game['id'].upper() + '**'
-    match game['type']:
-        case 'DRTL':
-            text += ' <:diabloico:760201452957335552>'
-        case 'DSHR':
-            text += ' <:diabloico:760201452957335552> (spawn)'
-        case 'HRTL':
-            text += ' <:hellfire:766901810580815932>'
-        case 'HSHR':
-            text += ' <:hellfire:766901810580815932> (spawn)'
-        case 'IRON':
-            text += ' Ironman'
-        case 'MEMD':
-            text += ' <:one_ring:1061898681504251954>'
-        case 'DRDX':
-            text += ' <:diabloico:760201452957335552> X'
-        case 'DWKD':
-            text += ' <:mod_wkd:1097321063077122068> modDiablo'
-        case 'HWKD':
-            text += ' <:mod_wkd:1097321063077122068> modHellfire'
-        case _:
-            text += ' ' + game['type']
+    embed = {
+        "type": "rich",
+        "title": game['id'].upper(),
+        "description": "",
+        "color": 0x00ff00,
+        "fields": [],
+        "thumbnail": {
+            "url": "",
+            "height": 0,
+            "width": 0
+        },
+        "footer": {
+            "text": f"Duration: {format_time_delta(round((time.time() - game['first_seen']) / 60))}"
+        }
+    }
 
-    text += ' ' + game['version']
+    # Checking if the game is ended to adjust border color
+    if time.time() - game['last_seen'] >= gameTTL:
+        embed["color"] = 0xff0000  # red for closed games
+        embed["title"] = "Game Closed"
 
-    match game['tick_rate']:
-        case 20:
-            text += ''
-        case 30:
-            text += ' Fast'
-        case 40:
-            text += ' Faster'
-        case 50:
-            text += ' Fastest'
-        case _:
-            text += ' speed: ' + str(game['tick_rate'])
+    # Mapping 4-letter code to game title
+    game_titles = {
+        'DRTL': 'DevilutionX',
+        'DSHR': 'DevilutionX',
+        'HRTL': 'DevilutionX',
+        'HSHR': 'DevilutionX',
+        'IRON': 'Ironman',
+        'MEMD': 'Middle Earth',
+        'DRDX': 'DiabloX',
+        'DWKD': 'wkdmod',
+        'HWKD': 'wkdmod',
+        'LTDR': 'Lord of Terror',
+        'LTDS': 'Lord of Terror',
+        'LTHR': 'Lord of Terror',
+        'LTHS': 'Lord of Terror'
+    }
 
-    match game['difficulty']:
-        case 0:
-            text += ' Normal'
-        case 1:
-            text += ' Nightmare'
-        case 2:
-            text += ' Hell'
+    # Setting the author field to game title with version
+    embed["author"]["name"] = f"{game_titles.get(game['type'], 'Unknown Game')} {game['version']}"
 
+    # Players
+    embed["fields"].append({
+        "name": "Players",
+        "value": ', '.join([name for name in game['players']]),
+        "inline": False
+    })
+
+    # Difficulty
+    difficulties = ["Normal", "Nightmare", "Hell"]
+    difficulty_value = difficulties[game['difficulty']] if 0 <= game['difficulty'] < len(
+        difficulties) else "Unknown"
+    embed["fields"].append({
+        "name": "Difficulty",
+        "value": difficulty_value,
+        "inline": True
+    })
+
+    # Game Speed
+    tick_rate_mapping = {
+        20: "Normal",
+        30: "Fast",
+        40: "Faster",
+        50: "Fastest"
+    }
+    speed = tick_rate_mapping.get(game['tick_rate'], f"Custom ({game['tick_rate']})")
+    embed["fields"].append({
+        "name": "Speed",
+        "value": speed,
+        "inline": True
+    })
+
+    # Game Options
+    diablo_game_codes = {'DRTL', 'DSHR', 'IRON', 'MEMD', 'DWKD', 'LTDR', 'LTDS'}
     attributes = []
     if game['run_in_town']:
         attributes.append('Run in Town')
     if game['full_quests']:
         attributes.append('Quests')
-    if game['theo_quest'] and game['type'] != 'DRTL':
+    if game['theo_quest'] and game['type'] not in diablo_game_codes:
         attributes.append('Theo Quest')
-    if game['cow_quest'] and game['type'] != 'DRTL':
+    if game['cow_quest'] and game['type'] not in diablo_game_codes:
         attributes.append('Cow Quest')
     if game['friendly_fire']:
         attributes.append('Friendly Fire')
 
-    if len(attributes) != 0:
-        text += ' ('
-        text += ', '.join(attributes)
-        text += ')'
+    if attributes:
+        embed["fields"].append({
+            "name": "Game Options",
+            "value": ', '.join(attributes),
+            "inline": False
+        })
 
-    text += '\nPlayers: **' + '**, **'.join([escape_discord_formatting_characters(name) for name in game['players']]) + '**'
-    text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
-    if ended:
-        text += '\nEnded after: `' + format_time_delta(round((time.time() - game['first_seen']) / 60)) + '`'
+    diablo_retail_url = 'https://user-images.githubusercontent.com/68359262/272125642-d3363701-9b6e-4eff-b43e-11b9a0b58813.png'
+    diablo_shareware_url = 'https://user-images.githubusercontent.com/68359262/272125649-076eb58c-f587-4b16-822f-7d9b56559c69.png'
+    hellfire_retail_url = 'https://user-images.githubusercontent.com/68359262/272125658-3fc00693-e6dc-4273-81e8-803dbf9f5d93.png'
+    hellfire_shareware_url = 'https://user-images.githubusercontent.com/68359262/272125665-17805298-1400-49aa-a6a3-ac80ba5767ee.png'
+    # Thumbnail based on game type
+    game_type_icons = {
+        'DRTL': diablo_retail_url,  # DevilutionX Diablo Retail
+        'DSHR': diablo_shareware_url,  # DevilutionX Diablo Shareware
+        'HRTL': hellfire_retail_url,  # DevilutionX Hellfire Retail
+        'HSHR': hellfire_shareware_url,  # DevilutionX Hellfire Shareware
 
-    return text
+        'IRON': diablo_retail_url,  # Ironman Diablo Retail (Sixcy)
+        # MISSING: Ironman Diablo Shareware (Sixcy)
+        # MISSING: Ironman Hellfire Retail (Sixcy)
+        # MISSING: Ironman Hellfire Shareware (Sixcy)
 
+        'MEMD': diablo_retail_url,  # Middle Earth Diablo Retail (DakkJaniels)
 
-async def update_status_message():
-    global current_online
-    global global_channel
-    global global_online_list_message
-    if global_online_list_message is not None:
-        try:
-            await global_online_list_message.delete()
-        except discord.errors.NotFound:
-            pass
-        global_online_list_message = None
-    text = 'There are currently **' + str(current_online) + '** public games.'
-    if current_online == 1:
-        text = 'There is currently **' + str(current_online) + '** public game.'
-    assert isinstance(global_channel, discord.TextChannel)
-    global_online_list_message = await global_channel.send(text)
+        'DRDX': diablo_retail_url,  # DiabloX Diablo Retail (ikonomov)
+        # MISSING: DiabloX Diablo Shareware (ikonomov)
+        # MISSING: DiabloX Hellfire Retail (ikonomov)
+        # MISSING: DiabloX Hellfire Shareware (ikonomov)
+
+        'DWKD': diablo_retail_url,  # wkdmod Diablo Retail (wkdgmr)
+        # MISSING: wkdmod Diablo Shareware (wkdgmr)
+        'HWKD': hellfire_retail_url,  # wkdmod Hellfire Retail (wkdgmr)
+        # MISSING: wkdmod Hellfire Shareware (wkdgmr)
+
+        'LTDR': diablo_retail_url,  # Lord of Terror Diablo Retail (kphoenix)
+        'LTDS': diablo_shareware_url,  # Lord of Terror Diablo Shareware (kphoenix)
+        'LTHR': hellfire_retail_url,  # Lord of Terror Hellfire Retail (kphoenix)
+        'LTHS': hellfire_shareware_url,  # Lord of Terror Hellfire Shareware (kphoenix)
+    }
+    embed["thumbnail"]["url"] = game_type_icons.get(game['type'], "")
+
+    return embed
 
 
 async def update_game_message(game_id):
     global global_channel
-    text = format_game(game_list[game_id])
+    embed_data = format_game(game_list[game_id])
+    embed = discord.Embed.from_dict(embed_data)
     if 'message' in game_list[game_id]:
-        if game_list[game_id]['message'].content != text:
-            try:
-                await game_list[game_id]['message'].edit(content=text)
-            except discord.errors.NotFound:
-                pass
+        try:
+            await game_list[game_id]['message'].edit(embed=embed)
+        except discord.errors.NotFound:
+            pass
         return
-    assert isinstance(global_channel, discord.TextChannel)
-    game_list[game_id]['message'] = await global_channel.send(text)
+    game_list[game_id]['message'] = await global_channel.send(embed=embed)
 
 
 def format_time_delta(minutes):
@@ -155,8 +193,10 @@ def format_time_delta(minutes):
 
 async def end_game_message(game_id):
     if 'message' in game_list[game_id]:
+        embed_data = format_game(game_list[game_id])
+        embed = discord.Embed.from_dict(embed_data)
         try:
-            await game_list[game_id]['message'].edit(content=format_game(game_list[game_id]))
+            await game_list[game_id]['message'].edit(embed=embed)
         except discord.errors.NotFound:
             pass
 
@@ -271,7 +311,6 @@ async def background_task():
                 continue
 
             current_online = len(game_list)
-            await update_status_message()
 
             activity = discord.Activity(name='Games online: '+str(current_online), type=discord.ActivityType.watching)
             await client.change_presence(activity=activity)
