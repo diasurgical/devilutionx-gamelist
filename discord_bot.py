@@ -221,6 +221,7 @@ async def background_task():
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
             except TimeoutError:
+                proc.terminate()
                 continue
             output = stdout.decode()
             if not output:
