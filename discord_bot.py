@@ -1,3 +1,4 @@
+from typing import List, Dict, Any, Optional
 import discord
 import json
 import time
@@ -16,22 +17,23 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 current_online = 0
-global_online_list_message = None
+global_online_list_message: Optional[discord.Message] = None
 global_channel: Optional[discord.TextChannel] = None
 gameTTL = 120  # games are marked as active for x seconds every time they show up
 
 
-def escape_discord_formatting_characters(text: str):
+def escape_discord_formatting_characters(text: str) -> str:
     return re.sub(r'([-\\*_#|~:@[\]()<>`])', r'\\\1', text)
 
 
-def format_game(game):
+def format_game(game: Dict[str, Any]) -> str:
     global gameTTL
     ended = time.time() - game['last_seen'] >= gameTTL
+    text = '';
     if ended:
-        text = '~~' + game['id'].upper() + '~~'
+        text += '~~' + game['id'].upper() + '~~'
     else:
-        text = '**' + game['id'].upper() + '**'
+        text += '**' + game['id'].upper() + '**'
     match game['type']:
         case 'DRTL':
             text += ' <:diabloico:760201452957335552>'
@@ -101,7 +103,7 @@ def format_game(game):
     return text
 
 
-async def update_status_message():
+async def update_status_message() -> None:
     global current_online
     global global_channel
     global global_online_list_message
@@ -118,21 +120,23 @@ async def update_status_message():
     global_online_list_message = await global_channel.send(text)
 
 
-async def update_game_message(game_id):
+async def update_game_message(game_id: str) -> None:
     global global_channel
     text = format_game(game_list[game_id])
     if 'message' in game_list[game_id]:
-        if game_list[game_id]['message'].content != text:
-            try:
-                await game_list[game_id]['message'].edit(content=text)
-            except discord.errors.NotFound:
-                pass
-        return
+        message = game_list[game_id]['message'];
+        if isinstance(message, discord.Message):
+            if message.content != text:
+                try:
+                    await message.edit(content=text)
+                except discord.errors.NotFound:
+                    pass
+            return
     assert isinstance(global_channel, discord.TextChannel)
     game_list[game_id]['message'] = await global_channel.send(text)
 
 
-def format_time_delta(minutes):
+def format_time_delta(minutes: int) -> str:
     if minutes < 2:
         return '1 minute'
     elif minutes < 60:
@@ -153,25 +157,31 @@ def format_time_delta(minutes):
     return text
 
 
-async def end_game_message(game_id):
+async def end_game_message(game_id: str) -> None:
     if 'message' in game_list[game_id]:
+        message = game_list[game_id]['message'];
+        if not isinstance(message, discord.Message):
+            return
         try:
-            await game_list[game_id]['message'].edit(content=format_game(game_list[game_id]))
+            await message.edit(content=format_game(game_list[game_id]))
         except discord.errors.NotFound:
             pass
 
 
-async def remove_game_messages(game_ids):
+async def remove_game_messages(game_ids: List[str]) -> None:
     for gameId in game_ids:
         if 'message' in game_list[gameId]:
+            message = game_list[gameId]['message'];
+            if not isinstance(message, discord.Message):
+                continue
             try:
-                await game_list[gameId]['message'].delete()
+                await message.delete()
             except discord.errors.NotFound:
                 pass
             del game_list[gameId]['message']
 
 
-def any_player_name_is_invalid(players):
+def any_player_name_is_invalid(players: List[str]) -> bool:
     for name in players:
         # using the same restricted character list as DevilutionX, see
         #  https://github.com/diasurgical/devilutionX/blob/0eda8d9367e08cea08b2ad81e1ce534e927646d6/Source/DiabloUI/diabloui.cpp#L649
@@ -188,7 +198,7 @@ def any_player_name_is_invalid(players):
     return False
 
 
-def any_player_name_contains_a_banned_word(players):
+def any_player_name_contains_a_banned_word(players: List[str]) -> bool:
     with open('./banlist', 'r') as ban_list_file:
         words = set([line.strip().upper() for line in ban_list_file.read().split('\n') if line.strip()])
 
@@ -200,14 +210,14 @@ def any_player_name_contains_a_banned_word(players):
     return False
 
 
-game_list = {}
+game_list: Dict[str, Dict[str, Any]] = {}
 background_task_running = 0
 
 
-async def background_task():
+async def background_task() -> None:
     global gameTTL
     global current_online
-    last_refresh = 0
+    last_refresh = 0.0
     refresh_seconds = 60  # refresh gamelist every x seconds
     while True:
         try:
@@ -262,7 +272,7 @@ async def background_task():
                 del game_list[key]
 
             if len(ended_games) != 0:
-                await remove_game_messages(game_list.keys())
+                await remove_game_messages(list(game_list.keys()))
 
             for gameId in game_list.keys():
                 await update_game_message(gameId)
@@ -280,10 +290,12 @@ async def background_task():
 
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
     print(f'We have logged in as {client.user}')
     global global_channel
-    global_channel = client.get_channel(DISCORD_CHANNEL_ID)
+    channel = client.get_channel(DISCORD_CHANNEL_ID)
+    assert isinstance(channel, discord.TextChannel)
+    global_channel = channel
     await background_task()
 
 with open('./discord_bot_token', 'r') as file:
