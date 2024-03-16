@@ -209,8 +209,7 @@ async def background_task() -> None:
             # Load the output as a JSON list
             games = json.loads(output)
 
-            ct = datetime.datetime.now()
-            logger.info('[' + str(ct) + '] Refreshing game list - ' + str(len(games)) + ' games')
+            logger.info('Refreshing game list - ' + str(len(games)) + ' games')
 
             for game in games:
                 if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
