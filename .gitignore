@@ -14,3 +14,5 @@ _deps
 .vs
 *.project
 *.workspace
+discord_bot.json
+/zerotier
