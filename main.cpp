@@ -11,6 +11,10 @@
 #include <vector>
 #include <ZeroTierSockets.h>
 
+#define SIZE_NEEDED(gameDataField) PacketHeaderSize \
+    + (reinterpret_cast<const uint8_t*>(&gameDataField) - reinterpret_cast<const uint8_t*>(gameData)) \
+    + sizeof(gameDataField)
+
 typedef std::vector<uint8_t> buffer_t;
 typedef std::array<uint8_t, 16> address_t;
 
@@ -218,7 +222,7 @@ static constexpr uint8_t InfoRequest = 0x21;
 static constexpr uint8_t InfoReply = 0x22;
 
 std::map<std::string, GameInfo> gameList;
-constexpr int PlayerNameLength = 32;
+constexpr size_t PlayerNameLength = 32;
 
 std::string makeVersionString(const GameData& gameData)
 {
@@ -252,6 +256,10 @@ std::string makeVersionString(const GameData& gameData)
 
 void decode(const buffer_t& data, address_t sender)
 {
+    const size_t PacketHeaderSize = 3;
+    if(data.size() < PacketHeaderSize)
+        return;
+
     if(data[0] == InfoRequest) {
         return; // Ignore requests from other clients
     }
@@ -264,15 +272,16 @@ void decode(const buffer_t& data, address_t sender)
         return;
     }
 
-    size_t neededSize = sizeof(GameData) + (PlayerNameLength * MaxPlayers) + 3;
+    const GameData* gameData = reinterpret_cast<const GameData*>(data.data() + PacketHeaderSize);
+    if(data.size() < SIZE_NEEDED(gameData->size))
+        return;
+    const size_t neededSize = PacketHeaderSize + gameData->size + (PlayerNameLength * MaxPlayers);
     if(data.size() < neededSize)
         return;
-    if(data.data()[3] != sizeof(GameData))
-        return;
-    const GameData* gameData = (const GameData*)(data.data() + 3);
+
     GameInfo game;
 
-    size_t gameNameSize = data.size() - neededSize;
+    const size_t gameNameSize = data.size() - neededSize;
     game.id.assign(reinterpret_cast<const char*>(data.data() + neededSize), gameNameSize);
 
     char ipstr[INET6_ADDRSTRLEN];
@@ -280,23 +289,34 @@ void decode(const buffer_t& data, address_t sender)
         return;           // insufficient buffer, shouldn't be possible.
     game.address = ipstr; // lwip_inet_ntop returns a null terminated string so we don't need to use assign
 
-    game.seed = gameData->seed;
+    if(SIZE_NEEDED(gameData->seed) <= gameData->size)
+        game.seed = gameData->seed;
 
-    const char* type = reinterpret_cast<const char*>(&gameData->type);
-    game.type.assign({ type[3], type[2], type[1], type[0] });
+    if(SIZE_NEEDED(gameData->type) <= gameData->size) {
+        const char* type = reinterpret_cast<const char*>(&gameData->type);
+        game.type.assign({ type[3], type[2], type[1], type[0] });
+    }
 
-    game.version = makeVersionString(*gameData);
-    game.difficulty = gameData->difficulty;
-    game.tickRate = gameData->tickRate;
-    game.runInTown = static_cast<bool>(gameData->runInTown);
-    game.theoQuest = static_cast<bool>(gameData->theoQuest);
-    game.cowQuest = static_cast<bool>(gameData->cowQuest);
-    game.friendlyFire = static_cast<bool>(gameData->friendlyFire);
-    game.fullQuests = static_cast<bool>(gameData->fullQuests);
+    if(SIZE_NEEDED(gameData->versionPatch) <= gameData->size)
+        game.version = makeVersionString(*gameData);
+    if(SIZE_NEEDED(gameData->difficulty) <= gameData->size)
+        game.difficulty = gameData->difficulty;
+    if(SIZE_NEEDED(gameData->tickRate) <= gameData->size)
+        game.tickRate = gameData->tickRate;
+    if(SIZE_NEEDED(gameData->runInTown) <= gameData->size)
+        game.runInTown = static_cast<bool>(gameData->runInTown);
+    if(SIZE_NEEDED(gameData->theoQuest) <= gameData->size)
+        game.theoQuest = static_cast<bool>(gameData->theoQuest);
+    if(SIZE_NEEDED(gameData->cowQuest) <= gameData->size)
+        game.cowQuest = static_cast<bool>(gameData->cowQuest);
+    if(SIZE_NEEDED(gameData->friendlyFire) <= gameData->size)
+        game.friendlyFire = static_cast<bool>(gameData->friendlyFire);
+    if(SIZE_NEEDED(gameData->fullQuests) <= gameData->size)
+        game.fullQuests = static_cast<bool>(gameData->fullQuests);
 
     for(size_t i = 0; i < MaxPlayers; i++) {
         std::string playerName;
-        const char* playerNamePointer = (const char*)(data.data() + 3 + sizeof(GameData) + (i * PlayerNameLength));
+        const char* playerNamePointer = (const char*)(data.data() + PacketHeaderSize + gameData->size + (i * PlayerNameLength));
         playerName.append(playerNamePointer, strnlen(playerNamePointer, PlayerNameLength));
         if(!playerName.empty())
             game.players.push_back(playerName);
