@@ -1,6 +1,5 @@
 import asyncio
 from collections import deque
-import datetime
 import discord
 import json
 import logging
@@ -31,7 +30,7 @@ def escape_discord_formatting_characters(text: str) -> str:
 
 def format_game_message(game: Dict[str, Any]) -> str:
     ended = time.time() - game['last_seen'] >= config['game_ttl']
-    text = '';
+    text = ''
     if ended:
         text += '~~' + game['id'].upper() + '~~'
     else:
@@ -168,7 +167,7 @@ def any_player_name_contains_a_banned_word(players: List[str]) -> bool:
 async def update_message(message: discord.Message, text: str) -> Optional[discord.Message]:
     if message.content != text:
         try:
-            await message.edit(content=text)
+            message = await message.edit(content=text)
         except discord.errors.NotFound:
             return None
     return message
@@ -237,6 +236,7 @@ async def background_task() -> None:
                 if message_index < len(active_messages):
                     message = await update_message(active_messages[message_index], message_text)
                     assert message is not None
+                    active_messages[message_index] = message
                 else:
                     message = await send_message(message_text)
                     assert message is not None
@@ -250,11 +250,11 @@ async def background_task() -> None:
                 active_messages.append(message)
             else:
                 await update_message(active_messages[game_count], format_status_message(game_count))
-                
+
             activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
             await client.change_presence(activity=activity)
-        except discord.errors.DiscordServerError as server_error:
-            logger.warn(repr(server_error))
+        except discord.DiscordException as discord_error:
+            logger.warn(repr(discord_error))
 
 
 @client.event
