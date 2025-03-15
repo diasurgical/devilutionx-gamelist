@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: dependencies
       run: sudo apt-get install cmake
 
@@ -23,7 +23,7 @@ jobs:
 
     - name: Upload
       if: ${{ !env.ACT }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: devilutionx-gamelist-Linux-x64
         path: build/devilutionx-gamelist
