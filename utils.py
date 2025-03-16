@@ -21,48 +21,54 @@ def is_admin(interaction: discord.Interaction, config: Dict[str, Any]) -> bool:
         return interaction.user.guild_permissions.administrator or interaction.user.id in config["bot_owners"]
     return False  # Default to False if it's not a Member
 
+def format_time_hhmmss(seconds: int) -> str:
+    """Formats elapsed time as HH:MM:SS or DD:HH:MM:SS if over 24 hours."""
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+
+    if days > 0:
+        return f"{days:02}:{hours:02}:{minutes:02}:{seconds:02}"  # DD:HH:MM:SS
+    return f"{hours:02}:{minutes:02}:{seconds:02}"  # HH:MM:SS
+
 def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.Embed:
     """Formats the game data into a Discord embed."""
-    embed = discord.Embed(title=game["id"].upper(), colour=discord.Colour.green())  # Default: Green for active
+    embed = discord.Embed(color=discord.Colour.green())  # Default: Green for active
 
-    # Check if game has expired
     current_time = time.time()
-    if current_time - game["last_seen"] >= config["game_ttl"]:
+    expired = (current_time - game["last_seen"]) >= config["game_ttl"]
+
+    # Game ID & Expired Status
+    game_name = game["id"].upper()
+    if expired:
         embed.colour = discord.Colour.red()  # Change to Red
-        embed.title = f"❌ Game Closed: {game['id'].upper()}"
+        game_name = "❌"
 
-    # Game Type & Version
-    game_title = config["game_types"].get(game["type"], "Unknown Game")
-    embed.set_author(name=f"{game_title} {game['version']}")
-
-    # Compact Field Formatting
+    # Core Game Info
     difficulty = config["difficulties"][game["difficulty"]] if 0 <= game["difficulty"] < len(config["difficulties"]) else "Unknown"
     speed = config["tick_rates"].get(str(game["tick_rate"]), f"Custom ({game['tick_rate']})")
     players = ", ".join(game["players"])
-
-    # Ensure only active options are included
+    
     options = [config["game_options"].get(opt, opt) for opt in game if game.get(opt) and opt in config["game_options"]]
     options_text = ", ".join(options) if options else "None"
 
-    # Move game name into the field title instead of the embed title
-    game_name = game["id"].upper()
+    # Determine elapsed time display
+    elapsed_seconds = int(current_time - game["first_seen"])
+    elapsed_time = format_time_hhmmss(elapsed_seconds)
 
-    # Create a single compact field with all essential info
+    if expired:
+        time_display = f"🕒 `{elapsed_time}`"  # Duration game was open
+    else:
+        time_display = f"⏳ <t:{int(game['first_seen'])}:R>"  # Discord timestamp
+
+    # Embed Content
     info_text = (
         f"🎮 {config['game_types'].get(game['type'], 'Unknown Game')} ({game['version']})\n"
         f"👥 {players}\n"
         f"🛡️ {difficulty} | ⚡ {speed}\n"
-        f"🛠️ {options_text}"
+        f"🛠️ {options_text}\n"
+        f"{time_display}"
     )
-
-    # Create the embed without a title
-    embed = discord.Embed(color=discord.Color.green())  # Default: Green for active
-
-    # Mark as expired if necessary
-    current_time = time.time()
-    if current_time - game["last_seen"] >= config["game_ttl"]:
-        embed.colour = discord.Colour.red()  # Change to Red
-        game_name = f"❌ (Closed)"
 
     embed.add_field(name=game_name, value=info_text, inline=False)
 
@@ -72,5 +78,3 @@ def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.E
         embed.set_thumbnail(url=f"attachment://{game['type']}.png")
 
     return embed
-
-
