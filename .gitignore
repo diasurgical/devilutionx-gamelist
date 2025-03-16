@@ -16,3 +16,8 @@ _deps
 *.workspace
 discord_bot.json
 /zerotier
+discord_bot_token
+devilutionx-gamelist.exe
+__pycache__/utils.cpython-313.pyc
+__pycache__/game_manager.cpython-313.pyc
+__pycache__/commands.cpython-313.pyc

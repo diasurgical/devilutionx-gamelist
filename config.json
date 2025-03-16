@@ -1,0 +1,40 @@
+{
+    "debug": false,
+    "discord_channel_id": 1061483226767556719,
+    "refresh_time": 30,
+    "game_ttl": 120,
+    "bot_owners": [],
+    "difficulties": [
+        "Normal",
+        "Nightmare",
+        "Hell"
+    ],
+    "tick_rates": {
+        "20": "Normal",
+        "30": "Fast",
+        "40": "Faster",
+        "50": "Fastest"
+    },
+    "game_types": {
+        "DRTL": "DevilutionX (Diablo)",
+        "DSHR": "DevilutionX (Diablo Shareware)",
+        "HRTL": "DevilutionX (Hellfire)",
+        "HSHR": "DevilutionX (Hellfire Shareware)",
+        "IRON": "sixcy - Ironman",
+        "MEMD": "DakkDaniels - Middle Earth",
+        "DRDX": "ikonomov - DiabloX",
+        "DWKD": "wkdgmr - wkdmod (Diablo)",
+        "HWKD": "wkdgmr - wkdmod (Hellfire)",
+        "LTDR": "kphoenix - Lord of Terror (Diablo)",
+        "LTDS": "kphoenix - Lord of Terror (Diablo Shareware)",
+        "LTHR": "kphoenix - Lord of Terror (Hellfire)",
+        "LTHS": "kphoenix - Lord of Terror (Hellfire Shareware)"
+    },
+    "game_options": {
+        "run_in_town": "Run in Town",
+        "full_quests": "Quests",
+        "theo_quest": "Theo Quest",
+        "cow_quest": "Cow Quest",
+        "friendly_fire": "Friendly Fire"
+    }
+}

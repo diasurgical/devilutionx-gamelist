@@ -1,0 +1,77 @@
+{
+    "games": {
+        "HRTL (1.5.4)": {
+            "unique_players": [
+                "Yorit",
+                "Cathan",
+                "miniWIZ"
+            ],
+            "game_count": 4,
+            "total_playtime_seconds": 1575,
+            "sessions": [
+                {
+                    "timestamp": 1742155773,
+                    "players": [
+                        "miniWIZ"
+                    ],
+                    "duration": 164
+                },
+                {
+                    "timestamp": 1742155856,
+                    "players": [
+                        "Cathan",
+                        "Yorit"
+                    ],
+                    "duration": 0
+                },
+                {
+                    "timestamp": 1742155979,
+                    "players": [
+                        "miniWIZ"
+                    ],
+                    "duration": 588
+                },
+                {
+                    "timestamp": 1742156607,
+                    "players": [
+                        "miniWIZ"
+                    ],
+                    "duration": 823
+                }
+            ]
+        },
+        "DRTL (1.5.4)": {
+            "unique_players": [
+                "Ninja",
+                "Jelani",
+                "Fenn"
+            ],
+            "game_count": 3,
+            "total_playtime_seconds": 1859,
+            "sessions": [
+                {
+                    "timestamp": 1742155815,
+                    "players": [
+                        "Jelani",
+                        "Ninja"
+                    ],
+                    "duration": 1859
+                },
+                {
+                    "timestamp": 1742156851,
+                    "players": [
+                        "Fenn"
+                    ],
+                    "duration": 0
+                },
+                {
+                    "timestamp": 1742157597,
+                    "players": [
+                        "Jelani"
+                    ],
+                    "duration": 0
+                }
+            ]
+        }
+    }
+}
