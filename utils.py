@@ -68,13 +68,10 @@ def save_config() -> None:
         json.dump(CONFIG, f, indent=4)
 
 
-def is_admin(interaction: discord.Interaction) -> bool:
-    """Check if user is an admin or a bot owner."""
+def is_bot_owner(interaction: discord.Interaction) -> bool:
+    """Check if user is a bot owner."""
     if isinstance(interaction.user, discord.Member):  # Ensure it's a Member
-        return (
-            interaction.user.guild_permissions.administrator
-            or interaction.user.id in CONFIG["bot_owners"]
-        )
+        return interaction.user.id in CONFIG["bot_owners"]
     return False  # Default to False if it's not a Member
 
 
