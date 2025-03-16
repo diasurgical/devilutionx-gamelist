@@ -11,7 +11,7 @@ def sanitize_player_name(name: str) -> str:
     """Removes forbidden characters from a player's name."""
     return re.sub(FORBIDDEN_CHARS, '', name)  # Strip invalid characters
 
-def load_banlist() -> set:
+def load_banlist() -> set[str]:
     """Loads the banlist from file and returns a set of bad words."""
     try:
         with open("./banlist", "r") as file:
