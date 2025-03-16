@@ -7,8 +7,6 @@ from utils import CONFIG, debug_print, format_game_embed
 from typing import Dict, List, Any
 from stats import update_game_statistics, update_playtime_statistics
 
-game_list: Dict[str, Dict[str, Any]] = {}
-
 
 async def fetch_game_list() -> List[Dict[str, Any]]:
     """Fetches the game list by running the external program."""
