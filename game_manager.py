@@ -3,7 +3,7 @@ import json
 import time
 import os
 import asyncio
-from utils import load_config, format_game_embed
+from utils import CONFIG, format_game_embed
 from typing import Dict, List, Any
 
 game_list: Dict[str, Dict[str, Any]] = {}
@@ -64,11 +64,11 @@ async def fetch_game_list_with_retries(retries: int = 3, delay: int = 5) -> List
     print("❌ No games found after multiple attempts. Assuming closure.")
     return []  # Return empty list if still no data after retries
 
-async def refresh_game_list(client: discord.Client, config: Dict[str, Any]) -> None:
+async def refresh_game_list(client: discord.Client) -> None:
     """Fetches and updates the game list from the external source."""
     print("🔄 Refreshing game list...")
 
-    channel = client.get_channel(config["discord_channel_id"])
+    channel = client.get_channel(CONFIG["discord_channel_id"])
     if not isinstance(channel, discord.TextChannel):  # Validate channel type
         print("❌ Channel not found or invalid! Aborting refresh.")
         return
@@ -102,7 +102,7 @@ async def refresh_game_list(client: discord.Client, config: Dict[str, Any]) -> N
         print(f"➕ New game added: {game_id}")
 
         # Create and send embed
-        embed = format_game_embed(game, config)
+        embed = format_game_embed(game)
         img_path = f"images/{game['type']}.png"
 
         try:
@@ -123,21 +123,21 @@ async def refresh_game_list(client: discord.Client, config: Dict[str, Any]) -> N
     for game_id, game in list(game_list.items()):
         time_since_last_seen = current_time - game["last_seen"]
 
-        print(f"⏳ Checking expiration for {game_id}: last seen {time_since_last_seen:.2f}s ago (TTL: {config['game_ttl']}s)")
+        print(f"⏳ Checking expiration for {game_id}: last seen {time_since_last_seen:.2f}s ago (TTL: {CONFIG['game_ttl']}s)")
 
-        if time_since_last_seen >= config["game_ttl"]:
+        if time_since_last_seen >= CONFIG["game_ttl"]:
             try:
                 if "message" not in game or not game["message"]:
                     print(f"⚠️ Warning: No message object for {game_id}. Skipping.")
                     continue
 
-                embed = format_game_embed(game, config)  # Generate the updated embed (turns red)
+                embed = format_game_embed(game)  # Generate the updated embed (turns red)
                 
                 bot_permissions = None
                 if isinstance(channel, discord.TextChannel) and channel.guild:
                     bot_permissions = channel.permissions_for(channel.guild.me)
                 else:
-                    print(f"⚠ Error: Cannot check permissions for {config['discord_channel_id']} (Invalid channel type)")
+                    print(f"⚠ Error: Cannot check permissions for {CONFIG['discord_channel_id']} (Invalid channel type)")
                     continue
                 
                 if not bot_permissions.manage_messages:

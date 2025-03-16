@@ -32,22 +32,28 @@ def censor_bad_words(name: str) -> str:
             name = pattern.sub(masked_word, name)  # Replace in original case
     return name
 
-def load_config() -> Dict[str, Any]:
-    """Loads the bot configuration from file."""
+CONFIG: Dict[str, Any] = {}
+
+def load_config() -> None:
+    """Loads the bot configuration from file and stores it globally."""
+    global CONFIG
     with open("config.json", "r") as f:
-        data: Dict[str, Any] = json.load(f)
-    return data
+        CONFIG = json.load(f)
 
-def save_config(config: Dict[str, Any]) -> None:
-    """Saves the updated config to file."""
+# Load Global config immediately
+load_config()
+
+def save_config() -> None:
+    """Saves the current global config back to file."""
     with open("config.json", "w") as f:
-        json.dump(config, f, indent=4)
+        json.dump(CONFIG, f, indent=4)
 
-def is_admin(interaction: discord.Interaction, config: Dict[str, Any]) -> bool:
+def is_admin(interaction: discord.Interaction) -> bool:
     """Check if user is an admin or a bot owner."""
     if isinstance(interaction.user, discord.Member):  # Ensure it's a Member
-        return interaction.user.guild_permissions.administrator or interaction.user.id in config["bot_owners"]
+        return interaction.user.guild_permissions.administrator or interaction.user.id in CONFIG["bot_owners"]
     return False  # Default to False if it's not a Member
+
 
 def format_time_hhmmss(seconds: int) -> str:
     """Formats elapsed time as HH:MM:SS or DD:HH:MM:SS if over 24 hours."""
@@ -59,12 +65,12 @@ def format_time_hhmmss(seconds: int) -> str:
         return f"{days:02}:{hours:02}:{minutes:02}:{seconds:02}"  # DD:HH:MM:SS
     return f"{hours:02}:{minutes:02}:{seconds:02}"  # HH:MM:SS
 
-def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.Embed:
+def format_game_embed(game: Dict[str, Any]) -> discord.Embed:
     """Formats the game data into a Discord embed."""
     embed = discord.Embed(color=discord.Colour.green())  # Default: Green for active
 
     current_time = time.time()
-    expired = (current_time - game["last_seen"]) >= config["game_ttl"]
+    expired = (current_time - game["last_seen"]) >= CONFIG["game_ttl"]
 
     # Game ID & Expired Status
     game_name = game["id"].upper()
@@ -73,13 +79,13 @@ def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.E
         game_name = "❌"
 
     # Core Game Info
-    difficulty = config["difficulties"][game["difficulty"]] if 0 <= game["difficulty"] < len(config["difficulties"]) else "Unknown"
-    speed = config["tick_rates"].get(str(game["tick_rate"]), f"Custom ({game['tick_rate']})")
+    difficulty = CONFIG["difficulties"][game["difficulty"]] if 0 <= game["difficulty"] < len(CONFIG["difficulties"]) else "Unknown"
+    speed = CONFIG["tick_rates"].get(str(game["tick_rate"]), f"Custom ({game['tick_rate']})")
     players = ", ".join(
     censor_bad_words(sanitize_player_name(player)) for player in game["players"]
     )
     
-    options = [config["game_options"].get(opt, opt) for opt in game if game.get(opt) and opt in config["game_options"]]
+    options = [CONFIG["game_options"].get(opt, opt) for opt in game if game.get(opt) and opt in CONFIG["game_options"]]
     options_text = ", ".join(options) if options else "None"
 
     # Determine elapsed time display
@@ -93,7 +99,7 @@ def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.E
 
     # Embed Content
     info_text = (
-        f"🎮 {config['game_types'].get(game['type'], 'Unknown Game')} ({game['version']})\n"
+        f"🎮 {CONFIG['game_types'].get(game['type'], 'Unknown Game')} ({game['version']})\n"
         f"👥 {players}\n"
         f"🛡️ {difficulty} | ⚡ {speed}\n"
         f"🛠️ {options_text}\n"

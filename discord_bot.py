@@ -3,8 +3,7 @@ import asyncio
 from discord.ext import commands
 from game_manager import refresh_game_list
 from commands import setup_commands
-from utils import load_config
-from typing import Dict, Any
+from utils import CONFIG
 
 # Setup Discord Bot
 intents = discord.Intents.default()
@@ -17,10 +16,10 @@ async def on_ready() -> None:
     client.loop.create_task(background_task())
 
 async def background_task() -> None:
-    """Periodically refreshes the game list with dynamically loaded config."""
+    """Periodically refreshes the game list."""
     while True:
-        await refresh_game_list(client, load_config())
-        await asyncio.sleep(load_config()["refresh_time"])
+        await refresh_game_list(client)
+        await asyncio.sleep(CONFIG["refresh_time"])
 
 
 # Run Bot
