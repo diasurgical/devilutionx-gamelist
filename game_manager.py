@@ -5,6 +5,7 @@ import os
 import asyncio
 from utils import CONFIG, debug_print, format_game_embed
 from typing import Dict, List, Any
+from stats import update_game_statistics, update_playtime_statistics
 
 game_list: Dict[str, Dict[str, Any]] = {}
 
@@ -71,6 +72,9 @@ async def fetch_game_list_with_retries(
     return []  # Return empty list if still no data after retries
 
 
+game_list: Dict[str, Any] = {}  # Global dictionary for tracking active games
+
+
 async def refresh_game_list(client: discord.Client) -> None:
     """Fetches and updates the game list from the external source."""
     print("🔄 Refreshing game list...")
@@ -100,6 +104,9 @@ async def refresh_game_list(client: discord.Client) -> None:
             game_list[game_id]["last_seen"] = current_time
             print(f"✅ Updated last_seen for {game_id}.")
             continue
+
+        # 🚀 **New Game Found → Track Statistics**
+        update_game_statistics(game)
 
         # Add new game entry
         game["first_seen"] = current_time
@@ -161,6 +168,9 @@ async def refresh_game_list(client: discord.Client) -> None:
 
                 await game["message"].edit(embed=embed)  # Update the message in Discord
                 print(f"🔴 Marked game {game_id} as expired and updated embed.")
+
+                # 🚀 **Game Ended → Track Playtime**
+                update_playtime_statistics(game)
 
             except discord.errors.NotFound:
                 print(

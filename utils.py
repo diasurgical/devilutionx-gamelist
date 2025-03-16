@@ -49,12 +49,13 @@ def censor_bad_words(name: str) -> str:
 
 
 CONFIG: Dict[str, Any] = {}
+CONFIG_FILE = "config.json"
 
 
 def load_config() -> None:
     """Loads the bot configuration from file and stores it globally."""
     global CONFIG
-    with open("config.json", "r") as f:
+    with open(CONFIG_FILE, "r") as f:
         CONFIG = json.load(f)
 
 
@@ -64,7 +65,7 @@ load_config()
 
 def save_config() -> None:
     """Saves the current global config back to file."""
-    with open("config.json", "w") as f:
+    with open(CONFIG_FILE, "w") as f:
         json.dump(CONFIG, f, indent=4)
 
 

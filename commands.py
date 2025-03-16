@@ -1,6 +1,7 @@
 import discord
-from utils import CONFIG, save_config, is_bot_owner
+from utils import CONFIG, format_time_hhmmss, save_config, is_bot_owner
 from discord.ext import commands
+from stats import get_game_statistics
 
 
 async def setup_commands(client: commands.Bot) -> None:
@@ -234,5 +235,31 @@ async def setup_commands(client: commands.Bot) -> None:
             await interaction.response.send_message(
                 f"⚠ Game option `{key}` not found.", ephemeral=True
             )
+
+    await client.tree.sync()
+
+    # ✅ Game Statistics Command
+    @tree.command(
+        name="game_stats", description="Get game statistics for a specific time range."
+    )
+    async def game_stats(
+        interaction: discord.Interaction, game_type: str, version: str, days: int = 7
+    ) -> None:
+        """Fetches statistics for a given game type and version within the given time range."""
+        stats = get_game_statistics(game_type, version, days)
+
+        if "message" in stats:
+            await interaction.response.send_message(f"❌ {stats['message']}")
+            return
+
+        # Format total playtime using the utility function
+        formatted_time = format_time_hhmmss(stats["total_playtime"])
+
+        await interaction.response.send_message(
+            f"📊 **Game Stats for {stats['game_type']} ({stats['version']}) - Last {stats['days']} Days**\n"
+            f"🎮 **Games Played:** {stats['games_played']}\n"
+            f"👥 **Unique Players:** {stats['unique_players']}\n"
+            f"⏳ **Total Playtime:** {formatted_time}"
+        )
 
     await client.tree.sync()
