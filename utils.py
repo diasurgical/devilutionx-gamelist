@@ -6,9 +6,9 @@ from typing import Dict, Any
 import re
 
 
-def debug_print(*args, **kwargs):
+def debug_print(*args, **kwargs) -> None:
     """Prints messages only if debug mode is enabled."""
-    if load_config().get("debug", False):
+    if CONFIG.get("debug", False):
         print(*args, **kwargs)
 
 
