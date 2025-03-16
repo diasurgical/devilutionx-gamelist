@@ -3,7 +3,7 @@ import json
 import time
 import os
 import asyncio
-from utils import CONFIG, format_game_embed
+from utils import CONFIG, debug_print, format_game_embed
 from typing import Dict, List, Any
 
 game_list: Dict[str, Dict[str, Any]] = {}
@@ -28,10 +28,10 @@ async def fetch_game_list() -> List[Dict[str, Any]]:
             return []
 
         if stderr:
-            print(f"⚠ Error Output from subprocess:\n{stderr.decode()}")
+            debug_print(f"🔍 [DEBUG] ZeroTier Logs:\n{stderr.decode().strip()}")
 
         output = stdout.decode().strip()
-        print(f"📜 Raw output:\n{output if output else '⚠ No output received!'}")
+        debug_print(f"📜 Raw output:\n{output if output else '⚠ No output received!'}")
 
         if not output:
             return []
@@ -119,10 +119,10 @@ async def refresh_game_list(client: discord.Client) -> None:
                 game_list[game_id]["message"] = await channel.send(
                     embed=embed, file=file
                 )
-                print(f"📤 Sent embed with image for {game_id}.")
+                debug_print(f"📤 Sent embed with image for {game_id}.")
             else:
                 game_list[game_id]["message"] = await channel.send(embed=embed)
-                print(f"📤 Sent embed for {game_id} (no image).")
+                debug_print(f"📤 Sent embed for {game_id} (no image).")
 
         except Exception as e:
             print(f"❌ Error sending embed for {game_id}: {e}")
@@ -132,7 +132,7 @@ async def refresh_game_list(client: discord.Client) -> None:
     for game_id, game in list(game_list.items()):
         time_since_last_seen = current_time - game["last_seen"]
 
-        print(
+        debug_print(
             f"⏳ Checking expiration for {game_id}: last seen {time_since_last_seen:.2f}s ago (TTL: {CONFIG['game_ttl']}s)"
         )
 
