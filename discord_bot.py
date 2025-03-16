@@ -5,15 +5,18 @@ from game_manager import refresh_game_list
 from commands import setup_commands
 from utils import CONFIG
 
+
 # Setup Discord Bot
 intents = discord.Intents.default()
 client = commands.Bot(command_prefix="!", intents=intents)
+
 
 @client.event
 async def on_ready() -> None:
     print(f"✅ Logged in as {client.user}")
     await setup_commands(client)
     client.loop.create_task(background_task())
+
 
 async def background_task() -> None:
     """Periodically refreshes the game list."""

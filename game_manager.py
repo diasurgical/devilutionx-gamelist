@@ -8,16 +8,17 @@ from typing import Dict, List, Any
 
 game_list: Dict[str, Dict[str, Any]] = {}
 
+
 async def fetch_game_list() -> List[Dict[str, Any]]:
     """Fetches the game list by running the external program."""
     try:
-        exe_name = "devilutionx-gamelist.exe" if os.name == "nt" else "./devilutionx-gamelist"
+        exe_name = (
+            "devilutionx-gamelist.exe" if os.name == "nt" else "./devilutionx-gamelist"
+        )
         print(f"🔄 Running: {exe_name}")
 
         proc = await asyncio.create_subprocess_shell(
-            exe_name,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            exe_name, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
@@ -51,18 +52,24 @@ async def fetch_game_list() -> List[Dict[str, Any]]:
         print(f"❌ Error fetching game list: {e}")
         return []
 
-async def fetch_game_list_with_retries(retries: int = 3, delay: int = 5) -> List[Dict[str, Any]]:
+
+async def fetch_game_list_with_retries(
+    retries: int = 3, delay: int = 5
+) -> List[Dict[str, Any]]:
     """Fetches game list with retries if the result is empty."""
     for attempt in range(retries):
         games = await fetch_game_list()  # Try to fetch game list
         if games:  # If we got games, return them
             return games
-        
-        print(f"⚠️ Attempt {attempt + 1}: Received empty game list. Retrying in {delay}s...")
+
+        print(
+            f"⚠️ Attempt {attempt + 1}: Received empty game list. Retrying in {delay}s..."
+        )
         await asyncio.sleep(delay)
 
     print("❌ No games found after multiple attempts. Assuming closure.")
     return []  # Return empty list if still no data after retries
+
 
 async def refresh_game_list(client: discord.Client) -> None:
     """Fetches and updates the game list from the external source."""
@@ -108,8 +115,10 @@ async def refresh_game_list(client: discord.Client) -> None:
         try:
             if os.path.exists(img_path):
                 file = discord.File(img_path, filename=f"{game['type']}.png")
-                embed.set_thumbnail(url=f"attachment://{game['type']}.png")  
-                game_list[game_id]["message"] = await channel.send(embed=embed, file=file)
+                embed.set_thumbnail(url=f"attachment://{game['type']}.png")
+                game_list[game_id]["message"] = await channel.send(
+                    embed=embed, file=file
+                )
                 print(f"📤 Sent embed with image for {game_id}.")
             else:
                 game_list[game_id]["message"] = await channel.send(embed=embed)
@@ -123,7 +132,9 @@ async def refresh_game_list(client: discord.Client) -> None:
     for game_id, game in list(game_list.items()):
         time_since_last_seen = current_time - game["last_seen"]
 
-        print(f"⏳ Checking expiration for {game_id}: last seen {time_since_last_seen:.2f}s ago (TTL: {CONFIG['game_ttl']}s)")
+        print(
+            f"⏳ Checking expiration for {game_id}: last seen {time_since_last_seen:.2f}s ago (TTL: {CONFIG['game_ttl']}s)"
+        )
 
         if time_since_last_seen >= CONFIG["game_ttl"]:
             try:
@@ -131,33 +142,40 @@ async def refresh_game_list(client: discord.Client) -> None:
                     print(f"⚠️ Warning: No message object for {game_id}. Skipping.")
                     continue
 
-                embed = format_game_embed(game)  # Generate the updated embed (turns red)
-                
+                embed = format_game_embed(
+                    game
+                )  # Generate the updated embed (turns red)
+
                 bot_permissions = None
                 if isinstance(channel, discord.TextChannel) and channel.guild:
                     bot_permissions = channel.permissions_for(channel.guild.me)
                 else:
-                    print(f"⚠ Error: Cannot check permissions for {CONFIG['discord_channel_id']} (Invalid channel type)")
+                    print(
+                        f"⚠ Error: Cannot check permissions for {CONFIG['discord_channel_id']} (Invalid channel type)"
+                    )
                     continue
-                
+
                 if not bot_permissions.manage_messages:
                     print(f"🚨 Missing permission to edit messages in {channel.name}.")
                     continue
-                
+
                 await game["message"].edit(embed=embed)  # Update the message in Discord
                 print(f"🔴 Marked game {game_id} as expired and updated embed.")
 
             except discord.errors.NotFound:
-                print(f"⚠️ Warning: Message for game {game_id} not found. It may have been deleted.")
+                print(
+                    f"⚠️ Warning: Message for game {game_id} not found. It may have been deleted."
+                )
 
             except discord.errors.Forbidden:
-                print(f"🚨 Error: Missing permission to edit messages in {channel.name}.")
+                print(
+                    f"🚨 Error: Missing permission to edit messages in {channel.name}."
+                )
 
             except Exception as e:
                 print(f"❌ Error updating embed for expired game {game_id}: {e}")
 
             expired_games.append(game_id)  # Mark for removal
-
 
     # Remove expired games
     for game_id in expired_games:
@@ -166,7 +184,9 @@ async def refresh_game_list(client: discord.Client) -> None:
 
     # Update bot status with the number of active games
     current_online = len(game_list)
-    activity = discord.Activity(name=f"Games online: {current_online}", type=discord.ActivityType.watching)
+    activity = discord.Activity(
+        name=f"Games online: {current_online}", type=discord.ActivityType.watching
+    )
     await client.change_presence(activity=activity)
     print(f"🎮 Updated bot status: Watching {current_online} games online.")
 
