@@ -6,10 +6,12 @@ from typing import Dict, Any
 import re
 
 
-def debug_print(*args, **kwargs) -> None:
+def debug_print(
+    *args: Any, sep: str = " ", end: str = "\n", file: Any = None, flush: bool = False
+) -> None:
     """Prints messages only if debug mode is enabled."""
     if CONFIG.get("debug", False):
-        print(*args, **kwargs)
+        print(*args, sep=sep, end=end, file=file, flush=flush)
 
 
 FORBIDDEN_CHARS = r'[,<>%&\\"?*#/: ]'  # Characters not allowed
