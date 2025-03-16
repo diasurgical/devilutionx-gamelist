@@ -19,7 +19,12 @@ async def fetch_game_list() -> List[Dict[str, Any]]:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
+        except asyncio.TimeoutError:
+            proc.terminate()  # Kill the process if it takes too long
+            print("⚠️ Timeout: devilutionx-gamelist took too long to respond.")
+            return
 
         if stderr:
             print(f"⚠ Error Output from subprocess:\n{stderr.decode()}")

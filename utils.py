@@ -3,6 +3,34 @@ import discord
 import os
 import time
 from typing import Dict, Any
+import re
+
+FORBIDDEN_CHARS = r'[,<>%&\\"?*#/: ]'  # Characters not allowed
+
+def sanitize_player_name(name: str) -> str:
+    """Removes forbidden characters from a player's name."""
+    return re.sub(FORBIDDEN_CHARS, '', name)  # Strip invalid characters
+
+def load_banlist() -> set:
+    """Loads the banlist from file and returns a set of bad words."""
+    try:
+        with open("./banlist", "r") as file:
+            return {line.strip().upper() for line in file if line.strip()}
+    except FileNotFoundError:
+        print("⚠ Warning: Banlist file not found. No words will be filtered.")
+        return set()
+
+BANNED_WORDS = load_banlist()
+
+def censor_bad_words(name: str) -> str:
+    """Replaces banned words in a player's name with asterisks."""
+    name_upper = name.upper()
+    for bad_word in BANNED_WORDS:
+        if bad_word in name_upper:
+            masked_word = '*' * len(bad_word)  # Replace with asterisks
+            pattern = re.compile(re.escape(bad_word), re.IGNORECASE)  # Case-insensitive match
+            name = pattern.sub(masked_word, name)  # Replace in original case
+    return name
 
 def load_config() -> Dict[str, Any]:
     """Loads the bot configuration from file."""
@@ -47,7 +75,9 @@ def format_game_embed(game: Dict[str, Any], config: Dict[str, Any]) -> discord.E
     # Core Game Info
     difficulty = config["difficulties"][game["difficulty"]] if 0 <= game["difficulty"] < len(config["difficulties"]) else "Unknown"
     speed = config["tick_rates"].get(str(game["tick_rate"]), f"Custom ({game['tick_rate']})")
-    players = ", ".join(game["players"])
+    players = ", ".join(
+    censor_bad_words(sanitize_player_name(player)) for player in game["players"]
+    )
     
     options = [config["game_options"].get(opt, opt) for opt in game if game.get(opt) and opt in config["game_options"]]
     options_text = ", ".join(options) if options else "None"
