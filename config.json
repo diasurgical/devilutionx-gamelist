@@ -32,6 +32,9 @@
     },
     "game_options": {
         "run_in_town": "Run in Town",
-        "full_quests": "Quests"
+        "full_quests": "Quests",
+        "theo_quest": "Theo Quest",
+        "cow_quest": "Cow Quest",
+        "friendly_fire": "Friendly Fire"
     }
 }
