@@ -1,4 +1,5 @@
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <cstdio>
 #include <ctime>
@@ -83,9 +84,10 @@ void print_ip6_addr(void* x)
     fprintf(stderr, "ZeroTier: ZTS_EVENT_ADDR_NEW_IP6, addr=%s\n", ipstr);
 }
 
-bool zt_node_online = false;
-bool zt_joined = false;
-bool zt_network_ready = false;
+std::atomic_bool zt_node_online(false);
+std::atomic_bool zt_joined(false);
+std::atomic_bool zt_network_ready(false);
+std::atomic<std::time_t> zt_peers_ready;
 
 static void Callback(void* ptr)
 {
@@ -105,6 +107,7 @@ static void Callback(void* ptr)
         fprintf(stderr, "ZeroTier: ZTS_EVENT_NETWORK_READY_IP6, networkId=%llx\n",
             (unsigned long long)msg->network->net_id);
         zt_ip6setup();
+        zt_peers_ready = std::time(nullptr) + 6;
         zt_network_ready = true;
     } else if(msg->event_code == ZTS_EVENT_ADDR_ADDED_IP6) {
         print_ip6_addr(&(msg->addr->addr));
@@ -115,11 +118,14 @@ static void Callback(void* ptr)
     } else if(msg->event_code == ZTS_EVENT_NETWORK_UPDATE) {
         fprintf(stderr, "ZeroTier: ZTS_EVENT_NETWORK_UPDATE\n");
     } else if(msg->event_code == ZTS_EVENT_PEER_DIRECT) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_DIRECT\n");
+        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_DIRECT %llx\n", msg->peer->peer_id);
+        zt_peers_ready = std::time(nullptr) + 6;
     } else if(msg->event_code == ZTS_EVENT_PEER_RELAY) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_RELAY\n");
+        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_RELAY %llx\n", msg->peer->peer_id);
+        zt_peers_ready = std::time(nullptr) + 6;
     } else if(msg->event_code == ZTS_EVENT_PEER_PATH_DISCOVERED) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_PATH_DISCOVERED\n");
+        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_PATH_DISCOVERED %llx\n", msg->peer->peer_id);
+        zt_peers_ready = std::time(nullptr) + 6;
     } else if(msg->event_code == ZTS_EVENT_STORE_PLANET) {
         fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_PLANET\n");
     } else if(msg->event_code == ZTS_EVENT_STORE_IDENTITY_SECRET) {
@@ -254,14 +260,14 @@ std::string makeVersionString(const GameData& gameData)
     return std::string(buffer.data(), result.ptr);
 }
 
-void decode(const buffer_t& data, address_t sender)
+bool decode(const buffer_t& data, address_t sender)
 {
     const size_t PacketHeaderSize = 3;
     if(data.size() < PacketHeaderSize)
-        return;
+        return false;
 
     if(data[0] == InfoRequest) {
-        return; // Ignore requests from other clients
+        return false; // Ignore requests from other clients
     }
 
     if(data[0] != InfoReply || data[1] != Broadcast || data[2] != Host) {
@@ -269,15 +275,15 @@ void decode(const buffer_t& data, address_t sender)
         fprintf(stderr, "Type %02X\n", data[0]);
         fprintf(stderr, "src %02X\n", data[1]);
         fprintf(stderr, "dest %02X\n", data[2]);
-        return;
+        return false;
     }
 
     const GameData* gameData = reinterpret_cast<const GameData*>(data.data() + PacketHeaderSize);
     if(data.size() < SIZE_NEEDED(gameData->size))
-        return;
+        return false;
     const size_t neededSize = PacketHeaderSize + gameData->size + (PlayerNameLength * MaxPlayers);
     if(data.size() < neededSize)
-        return;
+        return false;
 
     GameInfo game;
 
@@ -286,7 +292,7 @@ void decode(const buffer_t& data, address_t sender)
 
     char ipstr[INET6_ADDRSTRLEN];
     if(lwip_inet_ntop(AF_INET6, sender.data(), ipstr, INET6_ADDRSTRLEN) == NULL)
-        return;           // insufficient buffer, shouldn't be possible.
+        return false;     // insufficient buffer, shouldn't be possible.
     game.address = ipstr; // lwip_inet_ntop returns a null terminated string so we don't need to use assign
 
     if(SIZE_NEEDED(gameData->seed) <= gameData->size)
@@ -323,6 +329,7 @@ void decode(const buffer_t& data, address_t sender)
     }
 
     gameList[game.id] = game;
+    return true;
 }
 
 int main(int argc, char* argv[])
@@ -331,8 +338,8 @@ int main(int argc, char* argv[])
     zts_init_set_event_handler(&Callback);
     zts_node_start();
 
-    while(!zt_network_ready || !zt_node_online) {
-        zts_util_delay(1000);
+    while(!zt_network_ready || !zt_node_online || std::time(nullptr) < zt_peers_ready) {
+        zts_util_delay(500);
     }
 
     fprintf(stderr, "Sending multicast game info request\n");
@@ -340,16 +347,17 @@ int main(int argc, char* argv[])
 
     address_t peer = {};
     buffer_t data;
-    bool dataRecived = false;
 
-    // Wait for peers for 5 seconds
-    std::time_t result = std::time(nullptr);
-    while(dataRecived || std::time(nullptr) - result < 5) {
-        dataRecived = recv(peer, data);
-        if(dataRecived) {
-            decode(data, peer);
+    // Wait for 5 seconds of inactivity
+    std::time_t timeout = std::time(nullptr) + 6;
+    while(std::time(nullptr) < timeout) {
+        if (!recv(peer, data)) {
+            zts_util_delay(500);
+            continue;
         }
-        zts_util_delay(1000);
+
+        if (decode(data, peer))
+            timeout = std::time(nullptr) + 6;
     }
 
     zts_node_stop();
