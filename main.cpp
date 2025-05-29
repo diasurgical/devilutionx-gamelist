@@ -228,6 +228,7 @@ static constexpr uint8_t InfoRequest = 0x21;
 static constexpr uint8_t InfoReply = 0x22;
 
 std::map<std::string, GameInfo> gameList;
+std::vector<nlohmann::json> observations;
 constexpr size_t PlayerNameLength = 32;
 
 std::string makeVersionString(const GameData& gameData)
@@ -258,6 +259,28 @@ std::string makeVersionString(const GameData& gameData)
     }
 
     return std::string(buffer.data(), result.ptr);
+}
+
+void recordObservation(const GameInfo &game)
+{
+    constexpr size_t bufferSize = 20;
+    GameInfo::json_string buffer(bufferSize, '\0');
+    const std::time_t now = std::time(nullptr);
+    std::tm *tm = std::localtime(&now);
+    std::strftime(buffer.data(), bufferSize, "%Y-%m-%d %H:%M:%S", tm);
+    buffer.resize(bufferSize - 1);
+
+    std::vector<nlohmann::json> players;
+    players.reserve(game.players.size());
+    for (const GameInfo::json_string &playerName : game.players) {
+        players.emplace_back(nlohmann::json {{ "name", playerName }});
+    }
+
+    observations.emplace_back(nlohmann::json {
+        { "time", buffer },
+        { "address", game.address },
+        { "players", players },
+    });
 }
 
 bool decode(const buffer_t& data, address_t sender)
@@ -328,8 +351,30 @@ bool decode(const buffer_t& data, address_t sender)
             game.players.push_back(playerName);
     }
 
+    recordObservation(game);
     gameList[game.id] = game;
     return true;
+}
+
+void dumpObservations()
+{
+    if (observations.empty())
+        return;
+
+    const size_t bufferSize = 28;
+    std::string fileName(bufferSize, '\0');
+    std::time_t now = std::time(nullptr);
+    std::tm *tm = std::localtime(&now);
+    std::strftime(fileName.data(), bufferSize, "%Y-%m-%d-observations.log", tm);
+    fileName.resize(bufferSize - 1);
+
+    std::FILE *file = std::fopen(fileName.c_str(), "ab");
+    if (file == nullptr)
+        return;
+    for (const nlohmann::json &observation : observations) {
+        std::fprintf(file, "%s\n", observation.dump().c_str());
+    }
+    std::fclose(file);
 }
 
 int main(int argc, char* argv[])
@@ -361,6 +406,7 @@ int main(int argc, char* argv[])
     }
 
     zts_node_stop();
+    dumpObservations();
 
     nlohmann::json root = nlohmann::json::array();
     for(const auto& game : gameList) {
