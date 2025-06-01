@@ -32,9 +32,9 @@ def format_game_message(game: Dict[str, Any]) -> str:
     ended = time.time() - game['last_seen'] >= config['game_ttl']
     text = ''
     if ended:
-        text += '~~' + game['id'].upper() + '~~'
+        text += '~~' + str(game['id']).upper() + '~~'
     else:
-        text += '**' + game['id'].upper() + '**'
+        text += '**' + str(game['id']).upper() + '**'
     match game['type']:
         case 'DRTL':
             text += ' <:diabloico:760201452957335552>'
@@ -55,9 +55,9 @@ def format_game_message(game: Dict[str, Any]) -> str:
         case 'HWKD':
             text += ' <:mod_wkd:1097321063077122068> modHellfire'
         case _:
-            text += ' ' + game['type']
+            text += ' ' + str(game['type'])
 
-    text += ' ' + game['version']
+    text += ' ' + str(game['version'])
 
     match game['tick_rate']:
         case 20:
