@@ -255,6 +255,8 @@ async def background_task() -> None:
             await client.change_presence(activity=activity)
         except discord.DiscordException as discord_error:
             logger.warn(repr(discord_error))
+        except ConnectionResetError as connection_error:
+            logger.warn(repr(connection_error))
 
 
 @client.event
