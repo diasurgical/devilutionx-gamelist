@@ -1,1 +1,1 @@
-discord>=2.*
+discord>=2.0

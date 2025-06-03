@@ -179,11 +179,18 @@ async def send_message(text: str) -> discord.Message:
 
 
 async def background_task() -> None:
+    await client.wait_until_ready()
+    maybeChannel = client.get_channel(config['channel'])
+    assert isinstance(maybeChannel, discord.TextChannel)
+
+    global channel
+    channel = maybeChannel
+
     known_games: Dict[str, Dict[str, Any]] = {}
     active_messages: Deque[discord.Message] = deque()
 
     last_refresh = 0.0
-    while True:
+    while not client.is_closed():
         try:
             sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
             if sleep_time > 0:
@@ -258,14 +265,14 @@ async def background_task() -> None:
 
 
 @client.event
+async def setup_hook() -> None:
+    client.bg_task = client.loop.create_task(background_task())
+
+
+@client.event
 async def on_ready() -> None:
     logger.info(f'We have logged in as {client.user}')
 
-    maybeChannel = client.get_channel(config['channel'])
-    assert isinstance(maybeChannel, discord.TextChannel)
-
-    global channel
-    channel = maybeChannel
     await background_task()
 
 
