@@ -10,12 +10,6 @@ from typing import Any, Deque, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-intents = discord.Intents.default()
-intents.message_content = True
-
-client = discord.Client(intents=intents)
-channel: Optional[discord.TextChannel] = None
-
 config: Dict[str, Any] = {
     'channel': 1061483226767556719,
     'game_ttl': 120,
@@ -159,121 +153,124 @@ def any_player_name_contains_a_banned_word(players: List[str]) -> bool:
                         if word in name.upper():
                             return True
         except:
-            logger.warn('Unable to load banlist file')
+            logger.warning('Unable to load banlist file')
 
     return False
 
 
-async def update_message(message: discord.Message, text: str) -> Optional[discord.Message]:
-    if message.content != text:
-        try:
-            message = await message.edit(content=text)
-        except discord.errors.NotFound:
-            return None
-    return message
+class GamebotClient(discord.Client):
+    def __init__(self, *, intents, **options):
+        intents.message_content = True
+        super().__init__(intents=intents, **options)
 
-
-async def send_message(text: str) -> discord.Message:
-    assert isinstance(channel, discord.TextChannel)
-    return await channel.send(text)
-
-
-async def background_task() -> None:
-    await client.wait_until_ready()
-    maybeChannel = client.get_channel(config['channel'])
-    assert isinstance(maybeChannel, discord.TextChannel)
-
-    global channel
-    channel = maybeChannel
-
-    known_games: Dict[str, Dict[str, Any]] = {}
-    active_messages: Deque[discord.Message] = deque()
-
-    last_refresh = 0.0
-    while not client.is_closed():
-        try:
-            sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            last_refresh = time.time()
-
-            # Call the external program and get the output
-            proc = await asyncio.create_subprocess_shell(
-                config['gamelist_program'],
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE)
-
+    async def _update_message(self, message: discord.Message, text: str) -> Optional[discord.Message]:
+        if message.content != text:
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
-            except TimeoutError:
-                proc.terminate()
-                continue
-            output = stdout.decode()
-            if not output:
-                continue
+                message = await message.edit(content=text)
+            except discord.errors.NotFound:
+                return None
+        return message
 
-            # Load the output as a JSON list
-            games = json.loads(output)
+    _channel: Optional[discord.TextChannel] = None
 
-            logger.info('Refreshing game list - ' + str(len(games)) + ' games')
+    async def _send_message(self, text: str) -> discord.Message:
+        assert isinstance(self._channel, discord.TextChannel)
+        return await self._channel.send(text)
 
-            for game in games:
-                if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
+    async def _background_task(self):
+        await self.wait_until_ready()
+        maybeChannel = self.get_channel(config['channel'])
+        assert isinstance(maybeChannel, discord.TextChannel)
+
+        self._channel = maybeChannel
+
+        known_games: Dict[str, Dict[str, Any]] = {}
+        active_messages: Deque[discord.Message] = deque()
+
+        last_refresh = 0.0
+        while not self.is_closed():
+            try:
+                sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                last_refresh = time.time()
+
+                # Call the external program and get the output
+                proc = await asyncio.create_subprocess_shell(
+                    config['gamelist_program'],
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
+                except TimeoutError:
+                    proc.terminate()
+                    continue
+                output = stdout.decode()
+                if not output:
+                    errors = stderr.decode()
+                    if errors:
+                        logger.error(errors)
                     continue
 
-                key = game['id'].upper()
-                if key in known_games:
-                    known_games[key]['players'] = game['players']
-                else:
-                    known_games[key] = game
-                    known_games[key]['first_seen'] = time.time()
+                # Load the output as a JSON list
+                games = json.loads(output)
 
-                known_games[key]['last_seen'] = time.time()
+                logger.info('Refreshing game list - ' + str(len(games)) + ' games')
 
-            ended_games = [key for key, game in known_games.items() if time.time() - game['last_seen'] >= config['game_ttl']]
+                for game in games:
+                    if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
+                        continue
 
-            for key in ended_games:
-                if active_messages:
-                    await update_message(active_messages.popleft(), format_game_message(known_games[key]))
-                del known_games[key]
+                    key = game['id'].upper()
+                    if key in known_games:
+                        known_games[key]['players'] = game['players']
+                    else:
+                        known_games[key] = game
+                        known_games[key]['first_seen'] = time.time()
 
-            message_index = 0
-            for game in known_games.values():
-                message_text = format_game_message(game)
-                if message_index < len(active_messages):
-                    message = await update_message(active_messages[message_index], message_text)
-                    assert message is not None
-                    active_messages[message_index] = message
-                else:
-                    message = await send_message(message_text)
+                    known_games[key]['last_seen'] = time.time()
+
+                ended_games = [key for key, game in known_games.items() if time.time() - game['last_seen'] >= config['game_ttl']]
+
+                for key in ended_games:
+                    if active_messages:
+                        await self._update_message(active_messages.popleft(), format_game_message(known_games[key]))
+                    del known_games[key]
+
+                message_index = 0
+                for game in known_games.values():
+                    message_text = format_game_message(game)
+                    if message_index < len(active_messages):
+                        message = await self._update_message(active_messages[message_index], message_text)
+                        assert message is not None
+                        active_messages[message_index] = message
+                    else:
+                        message = await self._send_message(message_text)
+                        assert message is not None
+                        active_messages.append(message)
+                    message_index += 1
+
+                game_count = len(known_games)
+                if (len(active_messages) <= game_count):
+                    message = await self._send_message(format_status_message(game_count))
                     assert message is not None
                     active_messages.append(message)
-                message_index += 1
+                else:
+                    await self._update_message(active_messages[game_count], format_status_message(game_count))
 
-            game_count = len(known_games)
-            if (len(active_messages) <= game_count):
-                message = await send_message(format_status_message(game_count))
-                assert message is not None
-                active_messages.append(message)
-            else:
-                await update_message(active_messages[game_count], format_status_message(game_count))
-
-            activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
-            await client.change_presence(activity=activity)
-        except discord.DiscordException as discord_error:
-            logger.warn(repr(discord_error))
+                activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
+                await self.change_presence(activity=activity)
+            except discord.DiscordException as discord_error:
+                logger.warning(repr(discord_error))
 
 
-@client.event
-async def setup_hook() -> None:
-    client.bg_task = client.loop.create_task(background_task())
+    async def setup_hook(self) -> None:
+        self.bg_task = self.loop.create_task(self._background_task())
 
 
-@client.event
-async def on_ready() -> None:
-    logger.info(f'We have logged in as {client.user}')
-
-    await background_task()
+    async def on_ready(self):
+        logger.info(f'We have logged in as {self.user}')
 
 
 def run(runtimeConfig: Dict[str, Any]) -> None:
@@ -282,6 +279,7 @@ def run(runtimeConfig: Dict[str, Any]) -> None:
     for key, value in runtimeConfig.items():
         config[key] = value
 
+    client = GamebotClient(intents=discord.Intents.default())
     client.run(config['token'])
 
 
