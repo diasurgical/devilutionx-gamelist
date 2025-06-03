@@ -233,21 +233,21 @@ std::string makeVersionString(const GameData& gameData)
 
     std::to_chars_result result = std::to_chars(buffer.data(), end, gameData.versionMajor);
     if(result.ec != std::errc()) {
-        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
         return {};
     }
     *result.ptr = '.';
     ++result.ptr;
     result = std::to_chars(result.ptr, end, gameData.versionMinor);
     if(result.ec != std::errc()) {
-        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
         return {};
     }
     *result.ptr = '.';
     ++result.ptr;
     result = std::to_chars(result.ptr, end, gameData.versionPatch);
     if(result.ec != std::errc()) {
-        fprintf(stderr, std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
         return {};
     }
 
@@ -358,7 +358,7 @@ int main(int argc, char* argv[])
     for(const auto& game : gameList) {
         root.push_back(game.second);
     }
-    printf(root.dump().c_str());
+    printf("%s", root.dump().c_str());
 
     return 0;
 }

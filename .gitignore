@@ -16,3 +16,4 @@ _deps
 *.workspace
 discord_bot.json
 /zerotier
+/.cache
