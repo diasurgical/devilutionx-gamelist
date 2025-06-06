@@ -269,6 +269,8 @@ class GamebotClient(discord.Client):
                     await self.change_presence(activity=activity)
                 except discord.DiscordException as discord_error:
                     logger.warning(repr(discord_error))
+                except Exception as e:
+                    logger.error(e)
 
             logger.debug('Connection lost, waiting for reconnect')
             await self.wait_until_ready()
@@ -293,7 +295,7 @@ def run(runtimeConfig: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
     formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{')
     handler.setFormatter(formatter)
