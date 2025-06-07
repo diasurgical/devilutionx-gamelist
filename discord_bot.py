@@ -161,7 +161,7 @@ def any_player_name_contains_a_banned_word(players: List[str]) -> bool:
 
 
 class GamebotClient(discord.Client):
-    def __init__(self, *, intents, **options):
+    def __init__(self, *, intents: discord.Intents, **options: dict[str, Any]) -> None:
         intents.message_content = True
         super().__init__(intents=intents, **options)
 
@@ -179,7 +179,7 @@ class GamebotClient(discord.Client):
         assert isinstance(self._channel, discord.TextChannel)
         return await self._channel.send(text)
 
-    async def _background_task(self):
+    async def _background_task(self) -> None:
         await self.wait_until_ready()
 
         logger.debug('Connection established for the first time, preparing for loop start.')
@@ -261,12 +261,12 @@ class GamebotClient(discord.Client):
                         message_text = format_game_message(game)
                         if message_index < len(active_messages):
                             try:
-                                message = await self._update_message(active_messages[message_index], message_text)
+                                maybeMessage = await self._update_message(active_messages[message_index], message_text)
                             except ClientConnectorDNSError as e:
                                 logger.warning('DNS failure when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
                                 continue
-                            assert message is not None
-                            active_messages[message_index] = message
+                            assert maybeMessage is not None
+                            active_messages[message_index] = maybeMessage
                         else:
                             message = await self._send_message(message_text)
                             assert message is not None
@@ -300,11 +300,11 @@ class GamebotClient(discord.Client):
         self.bg_task = self.loop.create_task(self._background_task())
 
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         logger.info(f'We have logged in as {self.user}')
 
 
-def _translate_to_log_level(targetLevel: str) -> Optional[str]:
+def _translate_to_log_level(targetLevel: str) -> Optional[int]:
     if targetLevel.lower() == 'trace':
         logger.warning('TRACE is not a supported log level by python\'s logging framework, using DEBUG instead')
         targetLevel = 'debug'
@@ -324,7 +324,7 @@ def _translate_to_log_level(targetLevel: str) -> Optional[str]:
     return None
 
 
-def set_log_level(targetLevel: str):
+def set_log_level(targetLevel: str) -> None:
     loggerLevel = _translate_to_log_level(targetLevel)
 
     if loggerLevel:
