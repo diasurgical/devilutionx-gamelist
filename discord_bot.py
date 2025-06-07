@@ -228,6 +228,7 @@ class GamebotClient(discord.Client):
 
                     logger.info('Refreshing game list - ' + str(len(games)) + ' games')
 
+                    now = time.time()
                     for game in games:
                         if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
                             continue
@@ -237,11 +238,11 @@ class GamebotClient(discord.Client):
                             known_games[key]['players'] = game['players']
                         else:
                             known_games[key] = game
-                            known_games[key]['first_seen'] = time.time()
+                            known_games[key]['first_seen'] = now
 
-                        known_games[key]['last_seen'] = time.time()
+                        known_games[key]['last_seen'] = now
 
-                    ended_games = [key for key, game in known_games.items() if time.time() - game['last_seen'] >= config['game_ttl']]
+                    ended_games = [key for key, game in known_games.items() if now - game['last_seen'] >= config['game_ttl']]
 
                     for key in ended_games:
                         if active_messages:
