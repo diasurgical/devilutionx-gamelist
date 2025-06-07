@@ -15,7 +15,8 @@ config: Dict[str, Any] = {
     'game_ttl': 120,
     'refresh_seconds': 60,
     'banlist_file': './banlist',
-    'gamelist_program': './devilutionx-gamelist'
+    'gamelist_program': './devilutionx-gamelist',
+    'log_level': 'info'
 }
 
 def escape_discord_formatting_characters(text: str) -> str:
@@ -198,9 +199,11 @@ class GamebotClient(discord.Client):
                 try:
                     sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
                     if sleep_time > 0:
+                        logger.debug('Waiting %d seconds before next poll', sleep_time)
                         await asyncio.sleep(sleep_time)
                     last_refresh = time.time()
 
+                    logger.debug('attempting to call %s to get active games', config['gamelist_program'])
                     # Call the external program and get the output
                     proc = await asyncio.create_subprocess_shell(
                         config['gamelist_program'],
@@ -211,6 +214,7 @@ class GamebotClient(discord.Client):
                         stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
                     except TimeoutError:
                         proc.terminate()
+                        logger.warning('Fetching active games failed, %s took too long to return', config['gamelist_program'])
                         continue
                     output = stdout.decode()
                     if not output:
@@ -270,7 +274,7 @@ class GamebotClient(discord.Client):
                 except discord.DiscordException as discord_error:
                     logger.warning(repr(discord_error))
                 except Exception as e:
-                    logger.error(e)
+                    logger.exception('Unknown exception occurred: ')
 
             logger.debug('Connection lost, waiting for reconnect')
             await self.wait_until_ready()
@@ -284,11 +288,40 @@ class GamebotClient(discord.Client):
         logger.info(f'We have logged in as {self.user}')
 
 
+def _translate_to_log_level(targetLevel: str) -> Optional[str]:
+    if targetLevel.lower() == 'trace':
+        logger.warning('TRACE is not a supported log level by python\'s logging framework, using DEBUG instead')
+        targetLevel = 'debug'
+
+    match targetLevel.lower():
+        case 'debug':
+            return logging.DEBUG
+        case 'info':
+            return logging.INFO
+        case 'warn' | 'warning':
+            return logging.WARNING
+        case 'error':
+            return logging.ERROR
+        case 'critical':
+            return logging.CRITICAL
+        
+    return None
+
+
+def set_log_level(targetLevel: str):
+    loggerLevel = _translate_to_log_level(targetLevel)
+
+    if loggerLevel:
+        logger.setLevel(loggerLevel)
+
 def run(runtimeConfig: Dict[str, Any]) -> None:
     assert 'token' in runtimeConfig
 
     for key, value in runtimeConfig.items():
         config[key] = value
+
+    if 'log_level' in config:
+        set_log_level(config['log_level'])
 
     client = GamebotClient(intents=discord.Intents.default())
     client.run(config['token'])
