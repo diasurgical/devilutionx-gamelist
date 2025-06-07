@@ -1,4 +1,5 @@
 import asyncio
+from aiohttp.client_exceptions import ClientConnectorDNSError
 from collections import deque
 import discord
 import json
@@ -246,14 +247,24 @@ class GamebotClient(discord.Client):
 
                     for key in ended_games:
                         if active_messages:
-                            await self._update_message(active_messages.popleft(), format_game_message(known_games[key]))
+                            message = active_messages.popleft()
+                            try:
+                                await self._update_message(message, format_game_message(known_games[key]))
+                            except ClientConnectorDNSError as e:
+                                logger.warning('DNS failure when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
+                                active_messages.appendleft(message)
+                                continue
                         del known_games[key]
 
                     message_index = 0
                     for game in known_games.values():
                         message_text = format_game_message(game)
                         if message_index < len(active_messages):
-                            message = await self._update_message(active_messages[message_index], message_text)
+                            try:
+                                message = await self._update_message(active_messages[message_index], message_text)
+                            except ClientConnectorDNSError as e:
+                                logger.warning('DNS failure when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
+                                continue
                             assert message is not None
                             active_messages[message_index] = message
                         else:
@@ -268,7 +279,11 @@ class GamebotClient(discord.Client):
                         assert message is not None
                         active_messages.append(message)
                     else:
-                        await self._update_message(active_messages[game_count], format_status_message(game_count))
+                        try:
+                            await self._update_message(active_messages[game_count], format_status_message(game_count))
+                        except ClientConnectorDNSError as e:
+                            logger.warning('DNS failure when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
+                            continue
 
                     activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
                     await self.change_presence(activity=activity)
