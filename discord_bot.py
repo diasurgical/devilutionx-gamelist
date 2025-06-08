@@ -160,6 +160,32 @@ def any_player_name_contains_a_banned_word(players: List[str]) -> bool:
     return False
 
 
+async def list_games() -> Any:
+    logger.debug('attempting to call %s to get active games', config['gamelist_program'])
+
+    # Call the external program and get the output
+    proc = await asyncio.create_subprocess_shell(
+        config['gamelist_program'],
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
+    except TimeoutError:
+        proc.terminate()
+        logger.warning('Fetching active games failed, %s took too long to return', config['gamelist_program'])
+        return None
+
+    output = stdout.decode()
+    if not output:
+        errors = stderr.decode()
+        if errors:
+            logger.error(errors)
+        return None
+
+    return json.loads(output)
+
+
 class GamebotClient(discord.Client):
     def __init__(self, *, intents: discord.Intents, **options: dict[str, Any]) -> None:
         intents.message_content = True
@@ -204,28 +230,10 @@ class GamebotClient(discord.Client):
                         await asyncio.sleep(sleep_time)
                     last_refresh = time.time()
 
-                    logger.debug('attempting to call %s to get active games', config['gamelist_program'])
-                    # Call the external program and get the output
-                    proc = await asyncio.create_subprocess_shell(
-                        config['gamelist_program'],
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE)
-
-                    try:
-                        stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
-                    except TimeoutError:
-                        proc.terminate()
-                        logger.warning('Fetching active games failed, %s took too long to return', config['gamelist_program'])
-                        continue
-                    output = stdout.decode()
-                    if not output:
-                        errors = stderr.decode()
-                        if errors:
-                            logger.error(errors)
-                        continue
-
                     # Load the output as a JSON list
-                    games = json.loads(output)
+                    games = await list_games()
+                    if not games:
+                        continue
 
                     logger.info('Refreshing game list - ' + str(len(games)) + ' games')
 
