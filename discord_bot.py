@@ -251,7 +251,7 @@ class GamebotClient(discord.Client):
                             try:
                                 await self._update_message(message, format_game_message(known_games[key]))
                             except ClientConnectorError as e:
-                                logger.warning('DNS failure when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
+                                logger.warning('Connection error when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
                                 active_messages.appendleft(message)
                                 continue
                         del known_games[key]
@@ -263,7 +263,7 @@ class GamebotClient(discord.Client):
                             try:
                                 maybeMessage = await self._update_message(active_messages[message_index], message_text)
                             except ClientConnectorError as e:
-                                logger.warning('DNS failure when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
+                                logger.warning('Connection error when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
                                 continue
                             assert maybeMessage is not None
                             active_messages[message_index] = maybeMessage
@@ -282,7 +282,7 @@ class GamebotClient(discord.Client):
                         try:
                             await self._update_message(active_messages[game_count], format_status_message(game_count))
                         except ClientConnectorError as e:
-                            logger.warning('DNS failure when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
+                            logger.warning('Connection error when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
                             continue
 
                     activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
