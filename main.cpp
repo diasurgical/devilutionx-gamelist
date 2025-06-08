@@ -227,7 +227,7 @@ static constexpr uint8_t Broadcast = 0xFF;
 static constexpr uint8_t InfoRequest = 0x21;
 static constexpr uint8_t InfoReply = 0x22;
 
-std::map<std::string, GameInfo> gameList;
+nlohmann::json gameList = nlohmann::json::array();
 constexpr size_t PlayerNameLength = 32;
 
 std::string makeVersionString(const GameData& gameData)
@@ -328,7 +328,7 @@ bool decode(const buffer_t& data, address_t sender)
             game.players.push_back(playerName);
     }
 
-    gameList[game.id] = game;
+    gameList.push_back(game);
     return true;
 }
 
@@ -362,11 +362,7 @@ int main(int argc, char* argv[])
 
     zts_node_stop();
 
-    nlohmann::json root = nlohmann::json::array();
-    for(const auto& game : gameList) {
-        root.push_back(game.second);
-    }
-    printf("%s", root.dump().c_str());
+    printf("%s", gameList.dump().c_str());
 
     return 0;
 }
