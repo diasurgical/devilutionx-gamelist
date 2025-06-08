@@ -250,7 +250,7 @@ class GamebotClient(discord.Client):
                             message = active_messages.popleft()
                             try:
                                 await self._update_message(message, format_game_message(known_games[key]))
-                            except ClientConnectorDNSError as e:
+                            except ClientConnectorError as e:
                                 logger.warning('DNS failure when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
                                 active_messages.appendleft(message)
                                 continue
@@ -262,7 +262,7 @@ class GamebotClient(discord.Client):
                         if message_index < len(active_messages):
                             try:
                                 maybeMessage = await self._update_message(active_messages[message_index], message_text)
-                            except ClientConnectorDNSError as e:
+                            except ClientConnectorError as e:
                                 logger.warning('DNS failure when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
                                 continue
                             assert maybeMessage is not None
@@ -281,7 +281,7 @@ class GamebotClient(discord.Client):
                     else:
                         try:
                             await self._update_message(active_messages[game_count], format_status_message(game_count))
-                        except ClientConnectorDNSError as e:
+                        except ClientConnectorError as e:
                             logger.warning('DNS failure when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
                             continue
 
