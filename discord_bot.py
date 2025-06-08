@@ -1,5 +1,5 @@
 import asyncio
-from aiohttp.client_exceptions import ClientConnectorDNSError
+from aiohttp.client_exceptions import ClientConnectorError
 from collections import deque
 import discord
 import json
