@@ -11,6 +11,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 add_subdirectory(3rdParty/libzt)
 add_subdirectory(3rdParty/nlohmann_json)
 
+list(APPEND python_SRCS
+  discord_bot.py
+  ztapi_client.py)
+
 add_executable(devilutionx-gamelist
   main.cpp
 )
@@ -22,6 +26,10 @@ else()
 endif()
 
 target_link_libraries(devilutionx-gamelist PRIVATE nlohmann_json::nlohmann_json)
+
+foreach(src ${python_SRCS})
+  file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}/${src}" "${CMAKE_CURRENT_BINARY_DIR}/${src}" SYMBOLIC)
+endforeach()
 
 install(TARGETS devilutionx-gamelist
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})

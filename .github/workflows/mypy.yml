@@ -23,4 +23,4 @@ jobs:
       run: pip install discord.py mypy
 
     - name: Run MyPy
-      run: mypy discord_bot.py
+      run: mypy discord_bot.py ztapi_client.py
