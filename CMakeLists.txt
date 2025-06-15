@@ -12,6 +12,7 @@ add_subdirectory(3rdParty/libzt)
 add_subdirectory(3rdParty/nlohmann_json)
 
 list(APPEND python_SRCS
+  bot_db.py
   discord_bot.py
   ztapi_client.py)
 
