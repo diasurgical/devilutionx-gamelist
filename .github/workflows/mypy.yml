@@ -20,7 +20,7 @@ jobs:
         python-version: '3.x'
 
     - name: Install dependencies
-      run: pip install discord.py mypy
+      run: pip install discord.py mypy aiosqlite
 
     - name: Run MyPy
-      run: mypy discord_bot.py ztapi_client.py
+      run: mypy discord_bot.py ztapi_client.py bot_db.py
