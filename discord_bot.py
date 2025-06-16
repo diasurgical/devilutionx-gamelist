@@ -7,9 +7,15 @@ import logging
 import math
 import re
 import time
+from bot_db import BotDatabase
+from datetime import datetime, UTC
+from ipaddress import IPv6Address
 from typing import Any, Deque, Dict, List, Optional
+from ztapi_client import ZeroTierApiClient
 
 logger = logging.getLogger(__name__)
+
+ztid: str = 'a84ac5c10a7ebb5f'
 
 config: Dict[str, Any] = {
     'channel': 1061483226767556719,
@@ -17,6 +23,7 @@ config: Dict[str, Any] = {
     'refresh_seconds': 60,
     'banlist_file': './banlist',
     'gamelist_program': './devilutionx-gamelist',
+    'zt_token': '',
     'log_level': 'info'
 }
 
@@ -186,6 +193,34 @@ async def list_games() -> Any:
     return json.loads(output)
 
 
+async def dump_games(games: Any, db: BotDatabase) -> None:
+    now = datetime.now(UTC)
+    for game in games:
+        ipv6 = IPv6Address(game['address'])
+        gameName = game['id']
+        playerNames = game['players']
+        await db.save_player_sighting(now, ipv6, gameName, playerNames)
+
+
+async def dump_members(network: Any, members: Any, db: BotDatabase) -> None:
+    statusLookup = {}
+    statusTag = network['tagsByName']['status']
+    statusTagValues = statusTag['enums']
+    for statusTagValue in statusTagValues:
+        statusTagValueId = statusTagValues[statusTagValue]
+        statusLookup[statusTagValueId] = statusTagValue
+
+    statusTagId = statusTag['id']
+    for member in members:
+        id = member['config']['id']
+        physicalAddress = member['physicalAddress'] or ''
+        lastSeen = datetime.fromtimestamp(member['lastSeen'] / 1000)
+        tags = [t for t in member['config']['tags'] if t[0] == statusTagId]
+        tagValueId = tags[0][1] if len(tags) > 0 else statusTag['default']
+        status = statusLookup[tagValueId]
+        await db.save_zt_member(id, physicalAddress, lastSeen, status)
+
+
 class GamebotClient(discord.Client):
     def __init__(self, *, intents: discord.Intents, **options: dict[str, Any]) -> None:
         intents.message_content = True
@@ -199,11 +234,100 @@ class GamebotClient(discord.Client):
                 return None
         return message
 
-    _channel: Optional[discord.TextChannel] = None
 
     async def _send_message(self, text: str) -> discord.Message:
         assert isinstance(self._channel, discord.TextChannel)
         return await self._channel.send(text)
+
+
+    async def _update_discord_channel(self, games: Any) -> None:
+        logger.info('Refreshing game list - ' + str(len(games)) + ' games')
+
+        now = time.time()
+        known_games = self._known_games
+        for game in games:
+            if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
+                continue
+
+            key = game['id'].upper()
+            if key in known_games:
+                known_games[key]['players'] = game['players']
+            else:
+                known_games[key] = game
+                known_games[key]['first_seen'] = now
+
+            known_games[key]['last_seen'] = now
+
+        ended_games = [key for key, game in known_games.items() if now - game['last_seen'] >= config['game_ttl']]
+
+        try:
+            active_messages = self._active_messages
+            for key in ended_games:
+                if active_messages:
+                    message = active_messages.popleft()
+                    try:
+                        await self._update_message(message, format_game_message(known_games[key]))
+                    except ClientConnectorError as e:
+                        logger.warning('Connection error when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
+                        active_messages.appendleft(message)
+                        continue
+                del known_games[key]
+
+            message_index = 0
+            for game in known_games.values():
+                message_text = format_game_message(game)
+                if message_index < len(active_messages):
+                    try:
+                        maybeMessage = await self._update_message(active_messages[message_index], message_text)
+                    except ClientConnectorError as e:
+                        logger.warning('Connection error when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
+                        continue
+                    assert maybeMessage is not None
+                    active_messages[message_index] = maybeMessage
+                else:
+                    message = await self._send_message(message_text)
+                    assert message is not None
+                    active_messages.append(message)
+                message_index += 1
+
+            game_count = len(known_games)
+            if (len(active_messages) <= game_count):
+                message = await self._send_message(format_status_message(game_count))
+                assert message is not None
+                active_messages.append(message)
+            else:
+                try:
+                    await self._update_message(active_messages[game_count], format_status_message(game_count))
+                except ClientConnectorError as e:
+                    logger.warning('Connection error when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
+                    return
+
+            activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
+            await self.change_presence(activity=activity)
+        except discord.DiscordException as discord_error:
+            logger.warning(repr(discord_error))
+
+
+    async def _process_games(self, db: BotDatabase) -> None:
+        # Load the output as a JSON list
+        games = await list_games()
+        if not games:
+            return
+
+        tasks = []
+        tasks.append(self.loop.create_task(self._update_discord_channel(games)))
+        tasks.append(self.loop.create_task(dump_games(games, db)))
+        await asyncio.gather(*tasks)
+
+
+    async def _process_zt_members(self, zt: ZeroTierApiClient, db: BotDatabase) -> None:
+        logger.debug('Querying ZeroTier API for member list')
+        network = await zt.get_network(ztid)
+        if network == None: return
+        members = await zt.get_members(ztid)
+        if members == None: return
+        await dump_members(network, members, db)
+
 
     async def _background_task(self) -> None:
         await self.wait_until_ready()
@@ -214,94 +338,35 @@ class GamebotClient(discord.Client):
         assert isinstance(maybeChannel, discord.TextChannel)
 
         self._channel = maybeChannel
+        self._known_games: Dict[str, Dict[str, Any]] = {}
+        self._active_messages: Deque[discord.Message] = deque()
+        self._last_refresh = 0.0
 
-        known_games: Dict[str, Dict[str, Any]] = {}
-        active_messages: Deque[discord.Message] = deque()
-
-        last_refresh = 0.0
-        while True:
-            logger.debug('Starting main loop')
-            
+        async def main_loop(db: BotDatabase, zt: ZeroTierApiClient | None) -> None:
             while not self.is_closed():
                 try:
-                    sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
+                    sleep_time = config['refresh_seconds'] - (time.time() - self._last_refresh)
                     if sleep_time > 0:
                         logger.debug('Waiting %d seconds before next poll', sleep_time)
                         await asyncio.sleep(sleep_time)
-                    last_refresh = time.time()
+                    self._last_refresh = time.time()
 
-                    # Load the output as a JSON list
-                    games = await list_games()
-                    if not games:
-                        continue
-
-                    logger.info('Refreshing game list - ' + str(len(games)) + ' games')
-
-                    now = time.time()
-                    for game in games:
-                        if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
-                            continue
-
-                        key = game['id'].upper()
-                        if key in known_games:
-                            known_games[key]['players'] = game['players']
-                        else:
-                            known_games[key] = game
-                            known_games[key]['first_seen'] = now
-
-                        known_games[key]['last_seen'] = now
-
-                    ended_games = [key for key, game in known_games.items() if now - game['last_seen'] >= config['game_ttl']]
-
-                    for key in ended_games:
-                        if active_messages:
-                            message = active_messages.popleft()
-                            try:
-                                await self._update_message(message, format_game_message(known_games[key]))
-                            except ClientConnectorError as e:
-                                logger.warning('Connection error when attempting to mark a game as ended, assuming this is temporary and retrying next iteration.')
-                                active_messages.appendleft(message)
-                                continue
-                        del known_games[key]
-
-                    message_index = 0
-                    for game in known_games.values():
-                        message_text = format_game_message(game)
-                        if message_index < len(active_messages):
-                            try:
-                                maybeMessage = await self._update_message(active_messages[message_index], message_text)
-                            except ClientConnectorError as e:
-                                logger.warning('Connection error when attempting to update an active game message, assuming this is temporary and retrying next iteration.')
-                                continue
-                            assert maybeMessage is not None
-                            active_messages[message_index] = maybeMessage
-                        else:
-                            message = await self._send_message(message_text)
-                            assert message is not None
-                            active_messages.append(message)
-                        message_index += 1
-
-                    game_count = len(known_games)
-                    if (len(active_messages) <= game_count):
-                        message = await self._send_message(format_status_message(game_count))
-                        assert message is not None
-                        active_messages.append(message)
-                    else:
-                        try:
-                            await self._update_message(active_messages[game_count], format_status_message(game_count))
-                        except ClientConnectorError as e:
-                            logger.warning('Connection error when attempting to update the game count message, assuming this is temporary and retrying next iteration.')
-                            continue
-
-                    activity = discord.Activity(name='Games online: '+str(game_count), type=discord.ActivityType.watching)
-                    await self.change_presence(activity=activity)
-                except discord.DiscordException as discord_error:
-                    logger.warning(repr(discord_error))
+                    tasks = []
+                    tasks.append(self.loop.create_task(self._process_games(db)))
+                    if zt != None: tasks.append(self.loop.create_task(self._process_zt_members(zt, db)))
+                    tasks.append(self.loop.create_task(db.clean_up()))
+                    await asyncio.gather(*tasks)
                 except Exception as e:
                     logger.exception('Unknown exception occurred: ')
 
-            logger.debug('Connection lost, waiting for reconnect')
-            await self.wait_until_ready()
+        async with BotDatabase() as db:
+            async with ZeroTierApiClient(config['zt_token']) as zt:
+                maybeZt = zt if config['zt_token'] != '' else None
+                while True:
+                    logger.debug('Starting main loop')
+                    await main_loop(db, maybeZt)
+                    logger.debug('Connection lost, waiting for reconnect')
+                    await self.wait_until_ready()
 
 
     async def setup_hook(self) -> None:
@@ -352,11 +417,17 @@ def run(runtimeConfig: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
-    formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[{asctime}] [{levelname:<8}] {name}: {message}',
+        datefmt='',
+        style='{',
+        handlers=(handler,),
+        force=True)
+
+    logger.setLevel(logging.DEBUG)
 
     with open('./discord_bot.json', 'r') as file:
         runtimeConfig = json.load(file)

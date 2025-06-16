@@ -17,3 +17,4 @@ _deps
 discord_bot.json
 /zerotier
 /.cache
+/__pycache__
