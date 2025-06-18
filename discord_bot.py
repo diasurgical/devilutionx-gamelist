@@ -10,7 +10,7 @@ import time
 from bot_db import BotDatabase
 from datetime import datetime, UTC
 from ipaddress import IPv6Address
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, Iterator, List, Optional
 from ztapi_client import ZeroTierApiClient
 
 logger = logging.getLogger(__name__)
@@ -193,6 +193,12 @@ async def list_games() -> Any:
     return json.loads(output)
 
 
+async def apply_ip_bans(db: BotDatabase, zt: ZeroTierApiClient) -> None:
+    memberIds = await db.find_members_to_block()
+    for memberId in memberIds:
+        await zt.tag_member(ztid, memberId, 'status', 'blocked')
+
+
 async def dump_games(games: Any, db: BotDatabase) -> None:
     now = datetime.now(UTC)
     for game in games:
@@ -225,6 +231,96 @@ class GamebotClient(discord.Client):
     def __init__(self, *, intents: discord.Intents, **options: dict[str, Any]) -> None:
         intents.message_content = True
         super().__init__(intents=intents, **options)
+
+
+    async def _register_commands(self, db: BotDatabase, zt: ZeroTierApiClient | None) -> None:
+        tree = discord.app_commands.CommandTree(self)
+
+        def split_message(lines: List[str]) -> Iterator[str]:
+            chunk: List[str] = []
+            count = 0
+            for line in lines:
+                seplen = 0 if len(chunk) == 0 else 1
+                if count + len(line) + seplen > 2000:
+                    yield '\n'.join(chunk)
+                    chunk = []
+                    count = 0
+                chunk.append(line)
+                count += len(line) + seplen
+            if len(chunk) > 0:
+                yield '\n'.join(chunk)
+
+        @tree.command(name='findplayer', description='Finds games a player was seen in.')
+        @discord.app_commands.describe(name='The name of the player.')
+        async def findplayer(interaction: discord.Interaction, name: str) -> None:
+            playerSightings = await db.find_player_by_name(name)
+            if len(playerSightings) == 0:
+                await interaction.response.send_message(content='Player not found', ephemeral=True)
+                return
+
+            for chunk in split_message(playerSightings):
+                r = not interaction.response.is_done()
+                if r: await interaction.response.send_message(content=chunk, ephemeral=True)
+                else: await interaction.followup.send(content=chunk, ephemeral=True)
+
+        @tree.command(name='findztmember', description='Finds info about a ZeroTier member.')
+        @discord.app_commands.describe(ztmemberid='The ZeroTier Member ID (ztid) of the player.')
+        async def findztmember(interaction: discord.Interaction, ztmemberid: str) -> None:
+            ztMemberInfo = await db.find_zt_member_by_id(ztmemberid)
+            if len(ztMemberInfo) == 0:
+                await interaction.response.send_message(content='Member not found', ephemeral=True)
+                return
+            await interaction.response.send_message(content=ztMemberInfo, ephemeral=True)
+
+        @tree.command(name='listztmembers', description='Lists info about recently seen ZeroTier members.')
+        async def listztmembers(interaction: discord.Interaction) -> None:
+            ztMembers = await db.list_zt_members()
+            if len(ztMembers) == 0:
+                await interaction.response.send_message(content='No members', ephemeral=True)
+                return
+
+            for chunk in split_message(ztMembers):
+                r = not interaction.response.is_done()
+                if r: await interaction.response.send_message(content=chunk, ephemeral=True)
+                else: await interaction.followup.send(content=chunk, ephemeral=True)
+
+        @tree.command(name='listbanned', description='List recently banned IP addresses.')
+        async def listbanned(interaction: discord.Interaction) -> None:
+            bans = await db.list_bans()
+            if len(bans) == 0:
+                await interaction.response.send_message(content='No IP bans', ephemeral=True)
+                return
+
+            for chunk in split_message(bans):
+                r = not interaction.response.is_done()
+                if r: await interaction.response.send_message(content=chunk, ephemeral=True)
+                else: await interaction.followup.send(content=chunk, ephemeral=True)
+
+        @tree.command(name='ztban', description='Bans an IP address from using ZeroTier.')
+        @discord.app_commands.describe(ip='The physical IP address of the user.')
+        async def ztban(interaction: discord.Interaction, ip: str) -> None:
+            await db.ban(ip)
+            await interaction.response.send_message(content=f'IP {ip} banned', ephemeral=True)
+
+        @tree.command(name='revokeztban', description='Revokes a previously banned IP address so it can use ZeroTier.')
+        @discord.app_commands.describe(ip='The physical IP address of the user.')
+        async def revokeztban(interaction: discord.Interaction, ip: str) -> None:
+            await db.remove_ban(ip)
+            await interaction.response.send_message(content=f'Revoked ban on {ip}', ephemeral=True)
+
+        if zt != None:
+            @tree.command(name='setztstatus', description='Updates the value of the status tag for a ZeroTier member.')
+            @discord.app_commands.describe(memberid='The ZeroTier Member ID (ztid) of the player.')
+            @discord.app_commands.describe(status='The status of their membership.')
+            async def setztstatus(interaction: discord.Interaction, memberid: str, status: str) -> None:
+                if status not in ('allowed', 'blocked'):
+                    await interaction.response.send_message(content='Invalid status: must be "allowed" or "blocked"', ephemeral=True)
+                    return
+                await zt.tag_member(ztid, memberid, 'status', status)
+                await interaction.response.send_message(content=f'Status of member {memberid} updated to {status}', ephemeral=True)
+
+        await tree.sync()
+
 
     async def _update_message(self, message: discord.Message, text: str) -> Optional[discord.Message]:
         if message.content != text:
@@ -327,6 +423,7 @@ class GamebotClient(discord.Client):
         members = await zt.get_members(ztid)
         if members == None: return
         await dump_members(network, members, db)
+        await apply_ip_bans(db, zt)
 
 
     async def _background_task(self) -> None:
@@ -359,14 +456,18 @@ class GamebotClient(discord.Client):
                 except Exception as e:
                     logger.exception('Unknown exception occurred: ')
 
-        async with BotDatabase() as db:
-            async with ZeroTierApiClient(config['zt_token']) as zt:
-                maybeZt = zt if config['zt_token'] != '' else None
-                while True:
-                    logger.debug('Starting main loop')
-                    await main_loop(db, maybeZt)
-                    logger.debug('Connection lost, waiting for reconnect')
-                    await self.wait_until_ready()
+        try:
+            async with BotDatabase() as db:
+                async with ZeroTierApiClient(config['zt_token']) as zt:
+                    maybeZt = zt if config['zt_token'] != '' else None
+                    await self._register_commands(db, maybeZt)
+                    while True:
+                        logger.debug('Starting main loop')
+                        await main_loop(db, maybeZt)
+                        logger.debug('Connection lost, waiting for reconnect')
+                        await self.wait_until_ready()
+        except Exception as e:
+            logger.exception('Unknown exception occurred: ')
 
 
     async def setup_hook(self) -> None:
