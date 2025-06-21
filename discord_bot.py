@@ -5,6 +5,7 @@ import discord
 import json
 import logging
 import math
+import pathlib
 import re
 import time
 from typing import Any, Deque, Dict, List, Optional
@@ -14,9 +15,8 @@ logger = logging.getLogger(__name__)
 config: Dict[str, Any] = {
     'channel': 1061483226767556719,
     'game_ttl': 120,
-    'refresh_seconds': 60,
     'banlist_file': './banlist',
-    'gamelist_program': './devilutionx-gamelist',
+    'gamelist_file': './gamelist.json',
     'log_level': 'info'
 }
 
@@ -25,7 +25,7 @@ def escape_discord_formatting_characters(text: str) -> str:
 
 
 def format_game_message(game: Dict[str, Any]) -> str:
-    ended = time.time() - game['last_seen'] >= config['game_ttl']
+    ended = 'ended' in game
     text = ''
     if ended:
         text += '~~' + str(game['id']).upper() + '~~'
@@ -93,9 +93,9 @@ def format_game_message(game: Dict[str, Any]) -> str:
         text += ')'
 
     text += '\nPlayers: **' + '**, **'.join([escape_discord_formatting_characters(name) for name in game['players']]) + '**'
-    text += '\nStarted: <t:' + str(round(game['first_seen'])) + ':R>'
+    text += '\nStarted: <t:' + str(round(game['timestamp'])) + ':R>'
     if ended:
-        text += '\nEnded after: `' + format_time_delta(round((time.time() - game['first_seen']) / 60)) + '`'
+        text += '\nEnded after: `' + format_time_delta(round((game['ended'] - game['first_seen']) / 60)) + '`'
 
     return text
 
@@ -191,45 +191,29 @@ class GamebotClient(discord.Client):
 
         known_games: Dict[str, Dict[str, Any]] = {}
         active_messages: Deque[discord.Message] = deque()
+        last_game_update: float | None = None
+        last_log: float | None = None
 
-        last_refresh = 0.0
         while True:
             logger.debug('Starting main loop')
             
             while not self.is_closed():
                 try:
-                    sleep_time = config['refresh_seconds'] - (time.time() - last_refresh)
-                    if sleep_time > 0:
-                        logger.debug('Waiting %d seconds before next poll', sleep_time)
-                        await asyncio.sleep(sleep_time)
-                    last_refresh = time.time()
+                    await asyncio.sleep(1)
+                    now = time.monotonic()
+                    timestamp = time.time()
 
-                    logger.debug('attempting to call %s to get active games', config['gamelist_program'])
-                    # Call the external program and get the output
-                    proc = await asyncio.create_subprocess_shell(
-                        config['gamelist_program'],
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE)
-
+                    games = []
                     try:
-                        stdout, stderr = await asyncio.wait_for(proc.communicate(), 30)
-                    except TimeoutError:
-                        proc.terminate()
-                        logger.warning('Fetching active games failed, %s took too long to return', config['gamelist_program'])
-                        continue
-                    output = stdout.decode()
-                    if not output:
-                        errors = stderr.decode()
-                        if errors:
-                            logger.error(errors)
-                        continue
+                        # Load the file as a JSON list
+                        with open(config['gamelist_file']) as file:
+                            games = json.load(file)
 
-                    # Load the output as a JSON list
-                    games = json.loads(output)
+                        # Delete the file when we're done with it
+                        pathlib.Path.unlink(config['gamelist_file'])
+                    except FileNotFoundError:
+                        pass
 
-                    logger.info('Refreshing game list - ' + str(len(games)) + ' games')
-
-                    now = time.time()
                     for game in games:
                         if any_player_name_is_invalid(game['players']) or any_player_name_contains_a_banned_word(game['players']):
                             continue
@@ -239,13 +223,26 @@ class GamebotClient(discord.Client):
                             known_games[key]['players'] = game['players']
                         else:
                             known_games[key] = game
+                            known_games[key]['timestamp'] = timestamp
                             known_games[key]['first_seen'] = now
 
                         known_games[key]['last_seen'] = now
 
                     ended_games = [key for key, game in known_games.items() if now - game['last_seen'] >= config['game_ttl']]
 
+                    if active_messages and not games and not ended_games:
+                        if last_game_update and now - last_game_update >= 60 and (not last_log or now - last_log >= 60):
+                            logger.debug(f'No games seen in the last {round(now - last_game_update)} seconds.')
+                            last_log = now
+                        continue
+
+                    active_games_text = '1 active game' if len(games) == 1 else f'{len(games)} active games'
+                    ended_games_text = '1 ended game' if len(ended_games) == 1 else f'{len(ended_games)} ended games'
+                    logger.debug(f'Updating game list with {active_games_text} and {ended_games_text}.')
+                    last_game_update = now
+
                     for key in ended_games:
+                        known_games[key]['ended'] = now
                         if active_messages:
                             message = active_messages.popleft()
                             try:
