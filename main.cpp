@@ -68,11 +68,11 @@ void bring_network_online()
         set_reuseaddr(fd_udp);
         auto ret = lwip_bind(fd_udp, (struct sockaddr*)&in6, sizeof(in6));
         if(ret < 0) {
-            fprintf(stderr, "Error\n");
+            fprintf(stderr, "ZeroTier: Error binding to UDP %d\n", default_port);
             exit(1);
         }
         set_nonblock(fd_udp);
-        fprintf(stderr, "network_online\n");
+        printf("ZeroTier: Receiving packets on UDP %d\n", default_port);
     }
 }
 
@@ -81,7 +81,7 @@ void print_ip6_addr(void* x)
     char ipstr[INET6_ADDRSTRLEN];
     auto* in = static_cast<sockaddr_in6*>(x);
     lwip_inet_ntop(AF_INET6, &(in->sin6_addr), ipstr, INET6_ADDRSTRLEN);
-    fprintf(stderr, "ZeroTier: ZTS_EVENT_ADDR_NEW_IP6, addr=%s\n", ipstr);
+    printf("ZeroTier: ZTS_EVENT_ADDR_NEW_IP6, addr=%s\n", ipstr);
 }
 
 std::atomic_bool zt_node_online(false);
@@ -91,52 +91,103 @@ std::atomic_bool zt_network_ready(false);
 using steady_time_t = std::chrono::time_point<std::chrono::steady_clock>;
 std::atomic<steady_time_t> zt_last_peer_update;
 
+//#define ZT_VERBOSE_LOGGING
+
+#ifdef ZT_VERBOSE_LOGGING
+const char* zt_event_to_string(int16_t event_code)
+{
+    switch(event_code) {
+    case ZTS_EVENT_NODE_ONLINE: return "ZTS_EVENT_NODE_OFFLINE";
+    case ZTS_EVENT_NODE_OFFLINE: return "ZTS_EVENT_NODE_OFFLINE";
+    case ZTS_EVENT_NETWORK_READY_IP6: return "ZTS_EVENT_NETWORK_READY_IP6";
+    case ZTS_EVENT_ADDR_ADDED_IP6: return "ZTS_EVENT_ADDR_ADDED_IP6";
+    case ZTS_EVENT_NODE_UP: return "ZTS_EVENT_NODE_UP";
+    case ZTS_EVENT_NETWORK_OK: return "ZTS_EVENT_NETWORK_OK";
+    case ZTS_EVENT_NETWORK_UPDATE: return "ZTS_EVENT_NETWORK_UPDATE";
+    case ZTS_EVENT_PEER_DIRECT: return "ZTS_EVENT_PEER_DIRECT";
+    case ZTS_EVENT_PEER_RELAY: return "ZTS_EVENT_PEER_RELAY";
+    case ZTS_EVENT_PEER_PATH_DISCOVERED: return "ZTS_EVENT_PEER_PATH_DISCOVERED";
+    case ZTS_EVENT_PEER_PATH_DEAD: return "ZTS_EVENT_PEER_PATH_DEAD";
+    case ZTS_EVENT_STORE_PLANET: return "ZTS_EVENT_STORE_PLANET";
+    case ZTS_EVENT_STORE_IDENTITY_SECRET: return "ZTS_EVENT_STORE_IDENTITY_SECRET";
+    case ZTS_EVENT_STORE_IDENTITY_PUBLIC: return "ZTS_EVENT_STORE_IDENTITY_PUBLIC";
+    default: return nullptr;
+    }
+}
+
+void log_zt_event(zts_event_msg_t* msg)
+{
+    const char* eventText = zt_event_to_string(msg->event_code);
+
+    switch(msg->event_code) {
+    // These get logged regardless of verbosity
+    case ZTS_EVENT_NODE_ONLINE:
+    case ZTS_EVENT_NODE_OFFLINE:
+    case ZTS_EVENT_NETWORK_READY_IP6:
+    case ZTS_EVENT_ADDR_ADDED_IP6:
+        break;
+
+    // These log peer IDs
+    case ZTS_EVENT_PEER_DIRECT:
+    case ZTS_EVENT_PEER_RELAY:
+    case ZTS_EVENT_PEER_PATH_DISCOVERED:
+    case ZTS_EVENT_PEER_PATH_DEAD:
+        printf("ZeroTier: %s, peerId=%llx\n", eventText, msg->peer->peer_id);
+        break;
+
+    default:
+        if (eventText != nullptr) {
+            printf("ZeroTier: %s\n", eventText);
+        } else {
+            printf("ZeroTier: Unrecognized event code: %d\n", msg->event_code);
+        }
+        break;
+    }
+}
+#endif
+
 static void Callback(void* ptr)
 {
     zts_event_msg_t* msg = reinterpret_cast<zts_event_msg_t*>(ptr);
-    if(msg->event_code == ZTS_EVENT_NODE_ONLINE) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NODE_ONLINE, nodeId=%llx\n", (unsigned long long)msg->node->node_id);
+
+    switch(msg->event_code) {
+    case ZTS_EVENT_NODE_ONLINE:
+        printf("ZeroTier: ZTS_EVENT_NODE_ONLINE, nodeId=%llx\n", (unsigned long long)msg->node->node_id);
         zt_node_online = true;
         if(!zt_joined) {
             zts_net_join(net_id);
             bring_network_online();
             zt_joined = true;
         }
-    } else if(msg->event_code == ZTS_EVENT_NODE_OFFLINE) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NODE_OFFLINE\n");
+        break;
+
+    case ZTS_EVENT_NODE_OFFLINE:
+        printf("ZeroTier: ZTS_EVENT_NODE_OFFLINE\n");
         zt_node_online = false;
-    } else if(msg->event_code == ZTS_EVENT_NETWORK_READY_IP6) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NETWORK_READY_IP6, networkId=%llx\n",
+        break;
+
+    case ZTS_EVENT_NETWORK_READY_IP6:
+        printf("ZeroTier: ZTS_EVENT_NETWORK_READY_IP6, networkId=%llx\n",
             (unsigned long long)msg->network->net_id);
         zt_ip6setup();
         zt_last_peer_update = std::chrono::steady_clock::now();
         zt_network_ready = true;
-    } else if(msg->event_code == ZTS_EVENT_ADDR_ADDED_IP6) {
+        break;
+
+    case ZTS_EVENT_ADDR_ADDED_IP6:
         print_ip6_addr(&(msg->addr->addr));
-    } else if(msg->event_code == ZTS_EVENT_NODE_UP) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NODE_UP\n");
-    } else if(msg->event_code == ZTS_EVENT_NETWORK_OK) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NETWORK_OK\n");
-    } else if(msg->event_code == ZTS_EVENT_NETWORK_UPDATE) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_NETWORK_UPDATE\n");
-    } else if(msg->event_code == ZTS_EVENT_PEER_DIRECT) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_DIRECT %llx\n", msg->peer->peer_id);
+        break;
+
+    case ZTS_EVENT_PEER_DIRECT:
+    case ZTS_EVENT_PEER_RELAY:
+    case ZTS_EVENT_PEER_PATH_DISCOVERED:
         zt_last_peer_update = std::chrono::steady_clock::now();
-    } else if(msg->event_code == ZTS_EVENT_PEER_RELAY) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_RELAY %llx\n", msg->peer->peer_id);
-        zt_last_peer_update = std::chrono::steady_clock::now();
-    } else if(msg->event_code == ZTS_EVENT_PEER_PATH_DISCOVERED) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_PEER_PATH_DISCOVERED %llx\n", msg->peer->peer_id);
-        zt_last_peer_update = std::chrono::steady_clock::now();
-    } else if(msg->event_code == ZTS_EVENT_STORE_PLANET) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_PLANET\n");
-    } else if(msg->event_code == ZTS_EVENT_STORE_IDENTITY_SECRET) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_IDENTITY_SECRET\n");
-    } else if(msg->event_code == ZTS_EVENT_STORE_IDENTITY_PUBLIC) {
-        fprintf(stderr, "ZeroTier: ZTS_EVENT_STORE_IDENTITY_PUBLIC\n");
-    } else {
-        fprintf(stderr, "callback %i\n", msg->event_code);
+        break;
     }
+
+#ifdef ZT_VERBOSE_LOGGING
+    log_zt_event(msg);
+#endif
 }
 
 void send_oob_mc(const buffer_t& data)
@@ -223,13 +274,11 @@ bool recv(address_t& addr, buffer_t& data)
     return true;
 }
 
-static constexpr uint8_t MaxPlayers = 4;
-static constexpr uint8_t Host = 0xFE;
-static constexpr uint8_t Broadcast = 0xFF;
-static constexpr uint8_t InfoRequest = 0x21;
-static constexpr uint8_t InfoReply = 0x22;
-
-std::map<std::string, GameInfo> gameList;
+constexpr uint8_t MaxPlayers = 4;
+constexpr uint8_t Host = 0xFE;
+constexpr uint8_t Broadcast = 0xFF;
+constexpr uint8_t InfoRequest = 0x21;
+constexpr uint8_t InfoReply = 0x22;
 constexpr size_t PlayerNameLength = 32;
 
 std::string makeVersionString(const GameData& gameData)
@@ -241,28 +290,28 @@ std::string makeVersionString(const GameData& gameData)
 
     std::to_chars_result result = std::to_chars(buffer.data(), end, gameData.versionMajor);
     if(result.ec != std::errc()) {
-        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "ZeroTier: Error parsing major version number. %s\n", std::make_error_code(result.ec).message().c_str());
         return {};
     }
     *result.ptr = '.';
     ++result.ptr;
     result = std::to_chars(result.ptr, end, gameData.versionMinor);
     if(result.ec != std::errc()) {
-        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "ZeroTier: Error parsing minor version number. %s\n", std::make_error_code(result.ec).message().c_str());
         return {};
     }
     *result.ptr = '.';
     ++result.ptr;
     result = std::to_chars(result.ptr, end, gameData.versionPatch);
     if(result.ec != std::errc()) {
-        fprintf(stderr, "%s", std::make_error_code(result.ec).message().c_str());
+        fprintf(stderr, "ZeroTier: Error parsing patch version number. %s\n", std::make_error_code(result.ec).message().c_str());
         return {};
     }
 
     return std::string(buffer.data(), result.ptr);
 }
 
-bool decode(const buffer_t& data, address_t sender)
+bool decode(GameInfo& game, const buffer_t& data, address_t sender)
 {
     const size_t PacketHeaderSize = 3;
     if(data.size() < PacketHeaderSize)
@@ -273,10 +322,9 @@ bool decode(const buffer_t& data, address_t sender)
     }
 
     if(data[0] != InfoReply || data[1] != Broadcast || data[2] != Host) {
-        fprintf(stderr, "Unknown response\n");
-        fprintf(stderr, "Type %02X\n", data[0]);
-        fprintf(stderr, "src %02X\n", data[1]);
-        fprintf(stderr, "dest %02X\n", data[2]);
+        const uint8_t* member = sender.data() + sender.size() - 5;
+        fprintf(stderr, "ZeroTier: Unknown response (sender=%02X%02X%02X%02X%02X, type=%02X, src=%02X, dest=%02X)\n",
+            member[0], member[1], member[2], member[3], member[4], data[0], data[1], data[2]);
         return false;
     }
 
@@ -286,8 +334,6 @@ bool decode(const buffer_t& data, address_t sender)
     const size_t neededSize = PacketHeaderSize + gameData->size + (PlayerNameLength * MaxPlayers);
     if(data.size() < neededSize)
         return false;
-
-    GameInfo game;
 
     const size_t gameNameSize = data.size() - neededSize;
     game.id.assign(reinterpret_cast<const char*>(data.data() + neededSize), gameNameSize);
@@ -330,7 +376,6 @@ bool decode(const buffer_t& data, address_t sender)
             game.players.push_back(playerName);
     }
 
-    gameList[game.id] = game;
     return true;
 }
 
@@ -344,39 +389,66 @@ bool zt_peers_ready()
 
 int main(int argc, char* argv[])
 {
+    const char* gameFilePath = "gamelist.json";
+    if (argc > 1) {
+        gameFilePath = argv[1];
+    }
+
     zts_init_from_storage("./zerotier");
     zts_init_set_event_handler(&Callback);
     zts_node_start();
 
-    while(!zt_network_ready || !zt_node_online || zt_peers_ready()) {
+    while(!zt_network_ready || !zt_node_online || !zt_peers_ready()) {
         zts_util_delay(500);
     }
 
-    fprintf(stderr, "Sending multicast game info request\n");
+    std::map<std::string, GameInfo> gameList;
+    std::size_t totalReplies = 0;
+
+    printf("ZeroTier: Sending multicast game info request\n");
     send_oob_mc({ InfoRequest, Broadcast, Host });
+    steady_time_t lastInfoRequest = std::chrono::steady_clock::now();
 
-    address_t peer = {};
-    buffer_t data;
-
-    // Wait for 5 seconds of inactivity
-    steady_time_t timeStart = std::chrono::steady_clock::now();
-    while(std::chrono::steady_clock::now() - timeStart < std::chrono::seconds(5)) {
-        if (!recv(peer, data)) {
-            zts_util_delay(500);
-            continue;
+    while(true) {
+        const steady_time_t now = std::chrono::steady_clock::now();
+        const steady_time_t::duration diff = now - lastInfoRequest;
+        if(diff >= std::chrono::seconds(60)) {
+            printf("ZeroTier: Sending multicast game info request\n");
+            printf("ZeroTier: Total replies received so far: %lld\n", totalReplies);
+            if(!gameList.empty()) {
+                fprintf(stderr, "ZeroTier: Holding %d games since last request! Is discord_bot running?\n", gameList.size());
+            }
+            send_oob_mc({ InfoRequest, Broadcast, Host });
+            lastInfoRequest = now;
         }
 
-        if (decode(data, peer))
-            timeStart = std::chrono::steady_clock::now();
-    }
+        address_t peer = {};
+        buffer_t data;
+        while(recv(peer, data)) {
+            GameInfo game;
+            if (decode(game, data, peer)) {
+                gameList[game.id] = game;
+                totalReplies++;
+            }
+        }
 
-    zts_node_stop();
+        if(!gameList.empty()) {
+            FILE* gameFile = fopen(gameFilePath, "wbx");
+            if(gameFile != nullptr) {
+                nlohmann::json root = nlohmann::json::array();
+                for(const auto& game : gameList) {
+                    root.push_back(game.second);
+                }
 
-    nlohmann::json root = nlohmann::json::array();
-    for(const auto& game : gameList) {
-        root.push_back(game.second);
+                std::string text = root.dump();
+                std::fwrite(text.data(), sizeof(char), text.size(), gameFile);
+                std::fclose(gameFile);
+                gameList.clear();
+            }
+        }
+
+        zts_util_delay(5000);
     }
-    printf("%s", root.dump().c_str());
 
     return 0;
 }
