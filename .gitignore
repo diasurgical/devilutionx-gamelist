@@ -17,5 +17,6 @@ _deps
 discord_bot.json
 /zerotier
 /.cache
+/__pycache__
 *.egg-info
 *.pyc
