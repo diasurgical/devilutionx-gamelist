@@ -1,6 +1,7 @@
 include(functions/FetchContent_MakeAvailableExcludeFromAll)
 
 set(BUILD_HOST_SELFTEST OFF)
+set(LWIP_FLAGS "-DLWIP_IPV6_FORWARD=1")
 
 include(FetchContent)
 FetchContent_Declare(libzt

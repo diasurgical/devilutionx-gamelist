@@ -204,10 +204,13 @@ class GamebotClient(discord.Client):
                     timestamp = time.time()
 
                     games = []
+                    sightings = []
                     try:
-                        # Load the file as a JSON list
+                        # Load the file as a JSON object
                         with open(config['gamelist_file']) as file:
-                            games = json.load(file)
+                            gamelist_data = json.load(file)
+                            games = gamelist_data["games"]
+                            sightings = gamelist_data["player_sightings"]
 
                         # Delete the file when we're done with it
                         pathlib.Path.unlink(config['gamelist_file'])
