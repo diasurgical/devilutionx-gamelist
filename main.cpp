@@ -4,9 +4,12 @@
 #include <chrono>
 #include <cstdio>
 #include <lwip/mld6.h>
+#include <lwip/prot/ethernet.h>
+#include <lwip/prot/tcp.h>
 #include <lwip/sockets.h>
 #include <lwip/tcpip.h>
 #include <map>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -19,8 +22,17 @@
 typedef std::vector<uint8_t> buffer_t;
 typedef std::array<uint8_t, 16> address_t;
 
+struct PlayerIdentity {
+    address_t address;
+    std::string name;
+};
+
 uint64_t net_id = 0xa84ac5c10a7ebb5f;
 int default_port = 6112;
+int fd_udp = -1;
+
+std::mutex player_identities_mutex;
+std::vector<PlayerIdentity> player_identities;
 
 const uint8_t dvl_multicast_addr[16] = {
     // clang-format off
@@ -29,16 +41,173 @@ const uint8_t dvl_multicast_addr[16] = {
     // clang-format on
 };
 
-void zt_ip6setup()
+// ZTS_EVENT_NODE_UP:
+void process_pt_message(const uint8_t* src, const uint8_t* pkt, size_t len)
 {
-    ip6_addr_t mcaddr;
-    memcpy(mcaddr.addr, dvl_multicast_addr, 16);
-    mcaddr.zone = 0;
+    constexpr uint8_t CMD_ACK_PLRINFO = 0x02;
+    constexpr uint8_t CMD_SEND_PLRINFO = 0x35;
+    constexpr size_t TPktCheckOffset = 23;
+    constexpr size_t TPktCmdOffset = 27;
+    constexpr size_t TPktOffsetOffset = 28;
+    constexpr size_t TPktPlayerNameOffset = 35;
+    constexpr size_t TPktPlayerNameLength = 32;
+
+    // Skip packet type and player IDs
+    const uint8_t* tpkt = pkt + 3;
+    const size_t tpktLen = len - 3;
+    if(tpktLen < TPktPlayerNameOffset + TPktPlayerNameLength)
+        return;
+
+    // Sanity checks
+    if(tpkt[TPktCheckOffset + 1] != 'i' || tpkt[TPktCheckOffset] != 'p')
+        return;
+    if(tpkt[TPktCmdOffset] != CMD_ACK_PLRINFO && tpkt[TPktCmdOffset] != CMD_SEND_PLRINFO)
+        return;
+    if(tpkt[TPktOffsetOffset] != 0 || tpkt[TPktOffsetOffset + 1] != 0)
+        return;
+
+    address_t playerAddress;
+    memcpy(playerAddress.data(), src, playerAddress.size());
+    const char* namePtr = reinterpret_cast<const char*>(tpkt + TPktPlayerNameOffset);
+    const size_t nameLen = strnlen(namePtr, TPktPlayerNameLength);
+    std::string playerName(namePtr, nameLen);
+
+    std::lock_guard<std::mutex> lock(player_identities_mutex);
+    player_identities.emplace_back(PlayerIdentity { playerAddress, playerName });
+}
+
+err_t ethernet_input(struct pbuf* p, struct netif* n)
+{
+    fprintf(stderr, "ZeroTier: Ethernet input not supported (netif=%c%c)\n", n->name[0], n->name[1]);
+    return ERR_IF;
+}
+
+err_t ethip6_output(struct netif* n, struct pbuf* p, const ip6_addr_t* ip6addr)
+{
+    // Maximum MTU for ZeroTier virtual networks
+    constexpr size_t ZT_MAX_MTU = 10000;
+    uint8_t buf[ZT_MAX_MTU + 32];
+    size_t len = 0;
+
+    for(struct pbuf* q = p; q != nullptr; q = q->next) {
+        memcpy(buf + len, q->payload, q->len);
+        len += q->len;
+    }
+
+    size_t pos = 40;
+    uint8_t protocol = buf[6];
+    while(pos <= len) {
+        switch(protocol) {
+            case 0: // hop-by-hop options
+            case 43: // routing
+            case 60: // destination options
+            case 135: // mobility options
+                if ((pos + 8) > len)
+                    return ERR_IF; // invalid!
+                protocol = buf[pos];
+                pos += ((unsigned int)buf[pos + 1] * 8) + 8;
+                continue;
+        }
+        break;
+    }
+
+    // Only inspect non-empty TCP packets
+    if(pos >= len || protocol != IPPROTO_TCP)
+        return ERR_OK;
+
+    const uint8_t* tcpData = buf + pos;
+    const size_t tcpLen = len - pos;
+    if(tcpLen < TCP_HLEN) return ERR_OK;
+    const struct tcp_hdr* header = reinterpret_cast<const struct tcp_hdr*>(tcpData);
+
+    // The game client communicates on TCP 6112
+    const uint16_t sourcePort = lwip_ntohs(header->src);
+    const uint16_t destinationPort = lwip_ntohs(header->dest);
+    if(sourcePort != 6112 && destinationPort != 6112)
+        return ERR_OK;
+
+    const size_t headerLen = TCPH_HDRLEN_BYTES(header);
+    if(tcpLen < headerLen) return ERR_OK;
+    const uint8_t* payload = tcpData + headerLen;
+    size_t payloadLen = tcpLen - headerLen;
+
+    while(payloadLen >= sizeof(uint32_t)) {
+        const uint32_t packetSize = *reinterpret_cast<const uint32_t*>(payload);
+        if(packetSize <= 0) break;
+        payload += sizeof(uint32_t);
+        payloadLen -= sizeof(uint32_t);
+        if(payloadLen < packetSize) break;
+
+        constexpr uint8_t PT_MESSAGE = 0x01;
+        const uint8_t packetType = payload[0];
+        if(packetType == PT_MESSAGE)
+            process_pt_message(buf + 8, payload, packetSize);
+        payload += packetSize;
+        payloadLen -= packetSize;
+    }
+
+    return ERR_OK;
+}
+
+err_t zts_lwip_eth_tx(struct netif* n, struct pbuf* p)
+{
+    fprintf(stderr, "ZeroTier: Link output not supported (netif=%c%c)\n", n->name[0], n->name[1]);
+    return ERR_IF;
+}
+
+static err_t netif_init6(struct netif* n)
+{
+    if (n == nullptr) {
+        return ERR_IF;
+    }
+    n->hwaddr[5] = 0xf3;
+    n->hwaddr[4] = 0xaa;
+    n->hwaddr[3] = 0x3d;
+    n->hwaddr[2] = 0xf3;
+    n->hwaddr[1] = 0xb2;
+    n->hwaddr[0] = 0x8e;
+    n->hwaddr_len = 6;
+    n->name[0] = 'd';
+    n->name[1] = 'x';
+    n->linkoutput = zts_lwip_eth_tx;
+    n->output_ip6 = ethip6_output;
+    n->mtu = LWIP_MTU;
+    n->flags = NETIF_FLAG_ETHERNET | NETIF_FLAG_LINK_UP | NETIF_FLAG_UP;
+    return ERR_OK;
+}
+
+void create_network_interface(struct netif* n, ip6_addr_t* ip6)
+{
     LOCK_TCPIP_CORE();
-    mld6_joingroup(IP6_ADDR_ANY6, &mcaddr);
+    netif_add(n, nullptr, nullptr, nullptr, nullptr, netif_init6, ethernet_input);
+    n->ip6_autoconfig_enabled = 1;
+    netif_create_ip6_linklocal_address(n, 1);
+    netif_set_link_up(n);
+    netif_set_up(n);
+    netif_add_ip6_address(n, ip6, nullptr);
     UNLOCK_TCPIP_CORE();
 }
 
+void create_packet_sniffer()
+{
+    static struct netif n;
+    ip6_addr_t ip;
+    IP6_ADDR_PART(&ip, 0,
+        0xfd,
+        (net_id >> 56) & 0xff,
+        (net_id >> 48) & 0xff,
+        (net_id >> 40) & 0xff);
+    IP6_ADDR_PART(&ip, 1,
+        (net_id >> 32) & 0xff,
+        (net_id >> 24) & 0xff,
+        (net_id >> 16) & 0xff,
+        (net_id >> 8) & 0xff);
+    IP6_ADDR_PART(&ip, 2, net_id & 0xff, 0xdb, 0x07, 0x00);
+    IP6_ADDR_PART(&ip, 3, 0x00, 0x00, 0x00, 0x01);
+    create_network_interface(&n, &ip);
+}
+
+// ZTS_EVENT_NODE_ONLINE:
 void set_reuseaddr(int fd)
 {
     const int yes = 1;
@@ -52,8 +221,6 @@ void set_nonblock(int fd)
     mode |= O_NONBLOCK;
     lwip_fcntl(fd, F_SETFL, mode);
 }
-
-int fd_udp = -1;
 
 void bring_network_online()
 {
@@ -76,6 +243,18 @@ void bring_network_online()
     }
 }
 
+// ZTS_EVENT_NETWORK_READY_IP6:
+void zt_ip6setup()
+{
+    ip6_addr_t mcaddr;
+    memcpy(mcaddr.addr, dvl_multicast_addr, 16);
+    mcaddr.zone = 0;
+    LOCK_TCPIP_CORE();
+    mld6_joingroup(IP6_ADDR_ANY6, &mcaddr);
+    UNLOCK_TCPIP_CORE();
+}
+
+// ZTS_EVENT_ADDR_ADDED_IP6:
 void print_ip6_addr(void* x)
 {
     char ipstr[INET6_ADDRSTRLEN];
@@ -99,7 +278,9 @@ const char* zt_event_to_string(int16_t event_code)
     switch(event_code) {
     case ZTS_EVENT_NODE_ONLINE: return "ZTS_EVENT_NODE_OFFLINE";
     case ZTS_EVENT_NODE_OFFLINE: return "ZTS_EVENT_NODE_OFFLINE";
+    case ZTS_EVENT_NETWORK_READY_IP4: return "ZTS_EVENT_NETWORK_READY_IP4";
     case ZTS_EVENT_NETWORK_READY_IP6: return "ZTS_EVENT_NETWORK_READY_IP6";
+    case ZTS_EVENT_ADDR_ADDED_IP4: return "ZTS_EVENT_ADDR_ADDED_IP4";
     case ZTS_EVENT_ADDR_ADDED_IP6: return "ZTS_EVENT_ADDR_ADDED_IP6";
     case ZTS_EVENT_NODE_UP: return "ZTS_EVENT_NODE_UP";
     case ZTS_EVENT_NETWORK_OK: return "ZTS_EVENT_NETWORK_OK";
@@ -151,6 +332,10 @@ static void Callback(void* ptr)
     zts_event_msg_t* msg = reinterpret_cast<zts_event_msg_t*>(ptr);
 
     switch(msg->event_code) {
+    case ZTS_EVENT_NODE_UP:
+        create_packet_sniffer();
+        break;
+
     case ZTS_EVENT_NODE_ONLINE:
         printf("ZeroTier: ZTS_EVENT_NODE_ONLINE, nodeId=%llx\n", (unsigned long long)msg->node->node_id);
         zt_node_online = true;
@@ -272,6 +457,14 @@ bool recv(address_t& addr, buffer_t& data)
     memcpy(data.data(), buf, len);
     std::copy(in6.sin6_addr.s6_addr, in6.sin6_addr.s6_addr + 16, addr.begin());
     return true;
+}
+
+std::vector<PlayerIdentity> get_player_sightings()
+{
+    std::lock_guard<std::mutex> lock(player_identities_mutex);
+    std::vector<PlayerIdentity> playerSightings = player_identities;
+    player_identities.clear();
+    return playerSightings;
 }
 
 constexpr uint8_t MaxPlayers = 4;
@@ -404,6 +597,7 @@ int main(int argc, char* argv[])
 
     std::map<std::string, GameInfo> gameList;
     std::size_t totalReplies = 0;
+    std::size_t totalSightings = 0;
 
     printf("ZeroTier: Sending multicast game info request\n");
     send_oob_mc({ InfoRequest, Broadcast, Host });
@@ -415,6 +609,7 @@ int main(int argc, char* argv[])
         if(diff >= std::chrono::seconds(60)) {
             printf("ZeroTier: Sending multicast game info request\n");
             printf("ZeroTier: Total replies received so far: %zu\n", totalReplies);
+            printf("ZeroTier: Total player sightings so far: %zu\n", totalSightings);
             if(!gameList.empty()) {
                 fprintf(stderr, "ZeroTier: Holding %zu games since last request! Is discord_bot running?\n", gameList.size());
             }
@@ -432,13 +627,32 @@ int main(int argc, char* argv[])
             }
         }
 
-        if(!gameList.empty()) {
+        std::vector<PlayerIdentity> sightingList = get_player_sightings();
+        totalSightings += sightingList.size();
+
+        if(!gameList.empty() || !sightingList.empty()) {
             FILE* gameFile = fopen(gameFilePath, "wbx");
             if(gameFile != nullptr) {
-                nlohmann::json root = nlohmann::json::array();
+                nlohmann::json games = nlohmann::json::array();
                 for(const auto& game : gameList) {
-                    root.push_back(game.second);
+                    games.push_back(game.second);
                 }
+
+                nlohmann::json sightings = nlohmann::json::array();
+                for(const auto& sighting : sightingList) {
+                    char ipstr[INET6_ADDRSTRLEN];
+                    if(lwip_inet_ntop(AF_INET6, sighting.address.data(), ipstr, INET6_ADDRSTRLEN) == NULL)
+                        continue;     // insufficient buffer, shouldn't be possible.
+                    sightings.push_back(nlohmann::json {
+                        { "address", std::string(ipstr) },
+                        { "name", sighting.name }
+                    });
+                }
+
+                nlohmann::json root = nlohmann::json {
+                    { "games", games },
+                    { "player_sightings", sightings }
+                };
 
                 std::string text = root.dump();
                 std::fwrite(text.data(), sizeof(char), text.size(), gameFile);
