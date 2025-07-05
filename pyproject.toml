@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discord_bot"
+version = "2.0.0"
+description = "Gamelist script responsible for publishing game state to Discord"
+dynamic = ["dependencies"]
+
+requires-python = ">=3.8"
+
+[tool.setuptools.dynamic]
+dependencies = { file = "requirements.txt" }
+
+[tool.setuptools]
+py-modules = ["discord_bot"]
+
+[project.scripts]
+discord_bot = "discord_bot:main"
