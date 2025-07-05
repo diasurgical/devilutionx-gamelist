@@ -414,9 +414,9 @@ int main(int argc, char* argv[])
         const steady_time_t::duration diff = now - lastInfoRequest;
         if(diff >= std::chrono::seconds(60)) {
             printf("ZeroTier: Sending multicast game info request\n");
-            printf("ZeroTier: Total replies received so far: %lld\n", totalReplies);
+            printf("ZeroTier: Total replies received so far: %zu\n", totalReplies);
             if(!gameList.empty()) {
-                fprintf(stderr, "ZeroTier: Holding %d games since last request! Is discord_bot running?\n", gameList.size());
+                fprintf(stderr, "ZeroTier: Holding %zu games since last request! Is discord_bot running?\n", gameList.size());
             }
             send_oob_mc({ InfoRequest, Broadcast, Host });
             lastInfoRequest = now;
