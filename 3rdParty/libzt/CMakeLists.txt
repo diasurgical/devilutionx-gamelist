@@ -4,10 +4,18 @@ set(BUILD_HOST_SELFTEST OFF)
 set(LWIP_FLAGS "-DLWIP_IPV6_FORWARD=1")
 
 include(FetchContent)
-FetchContent_Declare(libzt
-  GIT_REPOSITORY https://github.com/diasurgical/libzt.git
-  GIT_TAG 72a518bcf7d87e32f718ca612ce2c8303ceedd12)
-FetchContent_MakeAvailableExcludeFromAll(libzt)
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.28.0")
+  FetchContent_Declare(libzt
+    GIT_REPOSITORY https://github.com/diasurgical/libzt.git
+    GIT_TAG 72a518bcf7d87e32f718ca612ce2c8303ceedd12
+    EXCLUDE_FROM_ALL)
+  FetchContent_MakeAvailable(libzt)
+else()
+  FetchContent_Declare(libzt
+    GIT_REPOSITORY https://github.com/diasurgical/libzt.git
+    GIT_TAG 72a518bcf7d87e32f718ca612ce2c8303ceedd12)
+  FetchContent_MakeAvailableExcludeFromAll(libzt)
+endif()
 
 if(NOT ANDROID)
   set(libzt_LIB_NAME zt-static)
