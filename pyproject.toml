@@ -14,7 +14,7 @@ requires-python = ">=3.8"
 dependencies = { file = "requirements.txt" }
 
 [tool.setuptools]
-py-modules = ["discord_bot"]
+py-modules = ["discord_bot", "bot_db", "ztapi_client"]
 
 [project.scripts]
 discord_bot = "discord_bot:main"
