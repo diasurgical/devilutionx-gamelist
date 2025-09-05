@@ -11,6 +11,7 @@ import time
 from bot_db import BotDatabase
 from datetime import datetime, UTC
 from ipaddress import IPv6Address
+from semver import compare
 from typing import Any, Deque, Dict, Iterator, List, Optional
 from ztapi_client import ZeroTierApiClient
 
@@ -62,7 +63,7 @@ def format_game_message(game: Dict[str, Any]) -> str:
 
     text += ' ' + str(game['version'])
     
-    if game['version'] < "1.6.0":
+    if compare(game['version'], "1.6.0") == -1:
         match game['tick_rate']:
             case 20:
                 text += ''
@@ -74,7 +75,7 @@ def format_game_message(game: Dict[str, Any]) -> str:
                 text += ' Fastest'
             case _:
                 text += ' speed: ' + str(game['tick_rate'])
-    elif game['version'] >= "1.6.0":
+    else:
         match game['tick_rate']:
             case 20:
                 text += ''
