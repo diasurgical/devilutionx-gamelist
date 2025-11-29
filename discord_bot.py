@@ -229,9 +229,9 @@ async def dump_members(network: Any, members: Any, db: BotDatabase) -> None:
 
 
 class GamebotClient(discord.Client):
-    def __init__(self, *, intents: discord.Intents, **options: Any) -> None:
+    def __init__(self, *, intents: discord.Intents) -> None:
         intents.message_content = True
-        super().__init__(intents=intents, **options)
+        super().__init__(intents=intents)
         self._last_game_update: float | None = None
         self._last_zt_update: float | None = None
         self._last_log: float | None = None
