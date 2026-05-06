@@ -234,6 +234,7 @@ class GamebotClient(discord.Client):
         super().__init__(intents=intents)
         self._last_game_update: float | None = None
         self._last_zt_update: float | None = None
+        self._last_cleanup: float | None = None
         self._last_log: float | None = None
 
 
@@ -494,7 +495,10 @@ class GamebotClient(discord.Client):
                     if zt and zt_api_is_ready:
                         tasks.append(self.loop.create_task(self._process_zt_members(zt, db)))
                         self._last_zt_update = now
-                    tasks.append(self.loop.create_task(db.clean_up()))
+                    cleanup_is_ready = not self._last_cleanup or now - self._last_cleanup >= 3600
+                    if cleanup_is_ready:
+                        tasks.append(self.loop.create_task(db.clean_up()))
+                        self._last_cleanup = now
                     await asyncio.gather(*tasks)
                 except Exception as e:
                     logger.exception('Unknown exception occurred: ')
