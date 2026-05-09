@@ -241,7 +241,6 @@ class BotDatabase:
 
         async with self._db.cursor() as cursor:
             await cursor.execute(query, queryParameters)
-        await self._db.commit()
 
     async def save_player_sighting(self, playerName: str, gameName: str, at: datetime) -> None:
         updateQuery = '\n'.join((
@@ -266,7 +265,6 @@ class BotDatabase:
             await cursor.execute(updateQuery, (at, playerName, gameName))
             if cursor.rowcount == 0:
                 await cursor.execute("INSERT INTO PlayerSighting VALUES(?, ?, ?, ?)", (playerName, gameName, at, at))
-        await self._db.commit()
 
     async def save_zt_member(self, id: str, physicalAddress: str, lastSeen: datetime, status: str) -> None:
         memberThreshold = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
@@ -291,6 +289,8 @@ class BotDatabase:
 
         async with self._db.cursor() as cursor:
             await cursor.execute(query, queryParameters)
+
+    async def commit(self) -> None:
         await self._db.commit()
 
     async def ban(self, physicalAddress: str) -> None:

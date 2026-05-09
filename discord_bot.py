@@ -199,6 +199,7 @@ async def dump_games(games: Any, db: BotDatabase) -> None:
         for playerName in game['players']:
             gameName = game['id']
             await db.save_player_sighting(playerName, gameName, now)
+    await db.commit()
 
 
 async def dump_sightings(sightings: Any, db: BotDatabase) -> None:
@@ -207,6 +208,7 @@ async def dump_sightings(sightings: Any, db: BotDatabase) -> None:
         ipv6 = IPv6Address(sighting['address'])
         playerName = sighting['name']
         await db.save_member_sighting(ipv6, playerName, now)
+    await db.commit()
 
 
 async def dump_members(network: Any, members: Any, db: BotDatabase) -> None:
@@ -226,6 +228,7 @@ async def dump_members(network: Any, members: Any, db: BotDatabase) -> None:
         tagValueId = tags[0][1] if len(tags) > 0 else statusTag['default']
         status = statusLookup[tagValueId]
         await db.save_zt_member(id, physicalAddress, lastSeen, status)
+    await db.commit()
 
 
 class GamebotClient(discord.Client):
